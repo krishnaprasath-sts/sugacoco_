@@ -1,5 +1,6 @@
 /** Reports (orders, customer balances) with Excel / PDF / CSV download, and the audit log. */
-import { useEffect, useMemo, useState } from 'react';
+import { useUrlPage, useUrlState } from '../../lib/useUrlState';
+import { useMemo } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router';
 import {
   Box,
@@ -19,10 +20,10 @@ import ResponsiveTable, { OrderLink } from '../../components/ResponsiveTable';
 import FilterAltOutlined from '@mui/icons-material/FilterAltOutlined';
 import { useAuditLog, useCustomersReport, useOrdersReport } from '../../api/stages';
 import ListPagination from '../../components/ListPagination';
-import { usePaged } from '../../lib/usePaged';
+import { useOnChange, usePaged } from '../../lib/usePaged';
 import { usePageSize } from '../../lib/pageSize';
 import type { OrderStatus } from '../../workflow/statuses';
-import { ROLE_LABEL } from '../../auth/roles';
+
 import { formatDate, formatDateTime, formatMoney } from '../../lib/format';
 import PageHeader from '../../components/PageHeader';
 import EmptyState from '../../components/EmptyState';
@@ -43,10 +44,12 @@ const PRESETS: Record<string, { label: string; statuses: OrderStatus[] }> = {
 };
 
 function OrdersReport() {
-  const [preset, setPreset] = useState('all');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [page, setPage] = useState(1);
+  // Kept in the URL so Back from an order returns to the same report and page.
+  const [presetRaw, setPreset] = useUrlState('preset', 'all');
+  const preset = PRESETS[presetRaw] ? presetRaw : 'all';
+  const [from, setFrom] = useUrlState('from');
+  const [to, setTo] = useUrlState('to');
+  const [page, setPage] = useUrlPage();
   const [pageSize] = usePageSize();
   // Filters without the page: used for downloads and to reset the page when filters change.
   const filterQs = useMemo(() => {
@@ -56,7 +59,7 @@ function OrdersReport() {
     if (PRESETS[preset].statuses.length) p.set('status', PRESETS[preset].statuses.join(','));
     return p.toString();
   }, [preset, from, to]);
-  useEffect(() => setPage(1), [filterQs]);
+  useOnChange(filterQs, () => setPage(1));
   const qs = `${filterQs}${filterQs ? '&' : ''}page=${page}&pageSize=${pageSize}`;
   const { data, isPending, error, refetch } = useOrdersReport(qs);
   const rows = data?.orders ?? [];
@@ -99,6 +102,7 @@ function OrdersReport() {
         ))}
       </Stack>
 
+      <ListPagination page={page} pageSize={pageSize} total={data?.total ?? 0} onChange={setPage} noun="orders" placement="top" />
       <Card>
         {error ? <ErrorState error={error} onRetry={() => refetch()} compact /> : isPending ? <Skeleton height={160} /> : !rows.length ? <EmptyState title="No orders for these filters" /> : (
           <ResponsiveTable
@@ -137,6 +141,7 @@ function CustomersReport() {
       <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2 }}>
         <DownloadMenu href="/api/reports/customers" />
       </Stack>
+      <ListPagination page={paged.page} pageSize={paged.pageSize} total={paged.total} onChange={paged.setPage} noun="customers" placement="top" />
       <Card>
         {error ? <ErrorState error={error} onRetry={() => refetch()} compact /> : isPending ? <Skeleton height={160} /> : !data?.customers.length ? <EmptyState title="No customer orders yet" /> : (
           <ResponsiveTable
@@ -202,10 +207,10 @@ function Changes({ value }: { value: unknown }) {
 }
 
 export function AuditLogPage() {
-  const [action, setAction] = useState('');
-  const [orderNo, setOrderNo] = useState('');
+  const [action, setAction] = useUrlState('action');
+  const [orderNo, setOrderNo] = useUrlState('orderNo');
   const orderNoQuery = useDebounced(orderNo.trim());
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useUrlPage();
   const [pageSize] = usePageSize();
   const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize), ...(action ? { action } : {}), ...(orderNoQuery ? { orderNo: orderNoQuery } : {}) }).toString();
   const { data, isPending, error, refetch } = useAuditLog(qs);
@@ -214,13 +219,14 @@ export function AuditLogPage() {
     <Box>
       <PageHeader overline="Administration" title="Audit Log" subtitle="Every change, approval, rejection, cancellation and closure, with who and when." />
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
-        <TextField select fullWidth={false} size="small" label="Action" value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }} sx={{ width: { xs: '100%', md: 320 } }}>
+        <TextField select fullWidth={false} size="small" label="Action" value={action} onChange={(e) => { setAction(e.target.value, { resetPage: true }); }} sx={{ width: { xs: '100%', md: 320 } }}>
           <MenuItem value="">All actions</MenuItem>
           {/* While a new page loads, keep the chosen action in the list so the box doesn't go blank. */}
           {(data?.actions ?? (action ? [action] : [])).map((a) => <MenuItem key={a} value={a}>{pretty(a)}</MenuItem>)}
         </TextField>
-        <TextField fullWidth={false} size="small" label="Order no." value={orderNo} onChange={(e) => { setOrderNo(e.target.value); setPage(1); }} sx={{ width: { xs: '100%', md: 240 } }} />
+        <TextField fullWidth={false} size="small" label="Order no." value={orderNo} onChange={(e) => { setOrderNo(e.target.value, { resetPage: true }); }} sx={{ width: { xs: '100%', md: 240 } }} />
       </Stack>
+      <ListPagination page={page} pageSize={pageSize} total={data?.total ?? 0} onChange={setPage} noun="changes" placement="top" />
       <Card>
         {error ? <ErrorState error={error} onRetry={() => refetch()} compact /> : isPending ? <Skeleton height={200} /> : !data?.entries.length ? <EmptyState title="No entries" /> : (
           <ResponsiveTable
@@ -236,7 +242,7 @@ export function AuditLogPage() {
                 render: (e) => (
                   <>
                     {e.userName ?? 'System'}
-                    {e.userRole && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{ROLE_LABEL[e.userRole]}</Typography>}
+                    {e.userRole && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{e.userRole}</Typography>}
                   </>
                 ),
               },

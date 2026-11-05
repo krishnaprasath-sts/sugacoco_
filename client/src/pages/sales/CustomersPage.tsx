@@ -82,6 +82,7 @@ export default function CustomersPage({ basePath = '/sales/customers', readOnly 
         }}
       />
 
+      <ListPagination page={page} pageSize={pageSize} total={data?.total ?? 0} onChange={setPage} noun="customers" placement="top" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : !isPending && customers.length === 0 ? (

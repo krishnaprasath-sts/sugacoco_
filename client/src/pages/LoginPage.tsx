@@ -13,7 +13,8 @@ import {
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useLogin, useMe } from '../auth/useAuth';
-import { ROLE_HOME } from '../auth/roles';
+import type { User } from '../auth/roles';
+import { homePath, navFor } from '../nav/navConfig';
 import { ApiError } from '../lib/api';
 import Logo from '../components/Logo';
 import { SIDEBAR_GRADIENT } from '../theme';
@@ -30,8 +31,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const from = (location.state as { from?: string } | null)?.from;
-  const target = (u: { role: keyof typeof ROLE_HOME }) =>
-    from && (from.startsWith('/orders/') || from.startsWith(ROLE_HOME[u.role])) ? from : ROLE_HOME[u.role];
+  // Return to the page they came from only if this user may open it (another user may sign in on the same PC).
+  const target = (u: User) =>
+    from && (from.startsWith('/orders/') || navFor(u).some((i) => from === i.path || from.startsWith(i.path + '/'))) ? from : homePath(u);
   if (user) return <Navigate to={target(user)} replace />;
 
   const error = login.error instanceof ApiError ? login.error : null;

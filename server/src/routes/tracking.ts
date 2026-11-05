@@ -12,7 +12,7 @@ import type { RowDataPacket } from 'mysql2';
 import type { PoolConnection } from 'mysql2/promise';
 import { pool, withTransaction } from '../db/pool.js';
 import { env } from '../config/env.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit } from '../services/audit.js';
@@ -39,7 +39,7 @@ const linkUrl = (token: string) => `${env.publicAppUrl}/track/${token}`;
 // ───────────── Staff: manage the link (Sales, MD/Admin) ─────────────
 
 export const trackingRouter = Router();
-const staff = [requireAuth, requireRole('SALES', 'ADMIN')];
+const staff = [requireAuth, requirePermission('tracking.manage')];
 const idParam = z.coerce.number().int().positive();
 
 async function activeLink(orderId: number) {

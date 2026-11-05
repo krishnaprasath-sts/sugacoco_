@@ -54,6 +54,7 @@ import { CATEGORY_LABEL } from '../../workflow/documents';
 import { fieldErrors, formError } from '../../lib/formErrors';
 import { formatDate, formatDateTime, formatMoney } from '../../lib/format';
 import { parseNum } from '../../lib/money';
+import { copyText } from '../../lib/copyText';
 import { useToast } from '../../components/useToast';
 
 const actionCardSx = { border: '2px solid', borderColor: 'primary.main' } as const;
@@ -586,6 +587,25 @@ export function ClosureCard({ detail }: { detail: OrderDetail }) {
 
 // ═════════════ Customer tracking link ═════════════
 
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+/**
+ * The server builds links from PUBLIC_APP_URL. In development that is localhost, which only
+ * works on the PC running the app. When staff open the app by network address, use that
+ * address instead so the link works on other devices. A real PUBLIC_APP_URL (live site) is kept.
+ */
+function shareableUrl(serverUrl: string | null): string | null {
+  if (!serverUrl) return null;
+  try {
+    const u = new URL(serverUrl);
+    if (LOCAL_HOSTS.includes(u.hostname) && !LOCAL_HOSTS.includes(window.location.hostname)) {
+      return window.location.origin + u.pathname;
+    }
+  } catch {
+    // keep the server value
+  }
+  return serverUrl;
+}
+
 export function TrackingLinkCard({ detail }: { detail: OrderDetail }) {
   const { data: link, isPending } = useTrackingLink(detail.order.id, detail.permissions.canManageTracking);
   const action = useTrackingAction(detail.order.id);
@@ -603,14 +623,11 @@ export function TrackingLinkCard({ detail }: { detail: OrderDetail }) {
       onError: (e) => { setConfirm(null); toast(formError(e) ?? 'Could not update link', 'error'); },
     });
 
+  const url = shareableUrl(link?.url ?? null);
   async function copy() {
-    if (!link?.url) return;
-    try {
-      await navigator.clipboard.writeText(link.url);
-      toast('Link copied. Send it to the customer.');
-    } catch {
-      toast('Copy failed. Select the link and copy it manually.', 'warning');
-    }
+    if (!url) return;
+    if (await copyText(url)) toast('Link copied. Send it to the customer.');
+    else toast('Copy failed. Select the link and copy it manually.', 'warning');
   }
 
   return (
@@ -622,13 +639,17 @@ export function TrackingLinkCard({ detail }: { detail: OrderDetail }) {
         </Typography>
         {isPending ? null : link ? (
           <>
-            <TextField value={link.url ?? 'Link hidden (security key changed). Regenerate to copy.'} slotProps={{ htmlInput: { readOnly: true, 'aria-label': 'Tracking link' } }} size="small" />
+            <TextField
+              value={url ?? 'Link hidden (security key changed). Regenerate to copy.'}
+              size="small"
+              slotProps={{ htmlInput: { readOnly: true, 'aria-label': 'Tracking link', onFocus: (e: React.FocusEvent<HTMLInputElement>) => e.target.select() } }}
+            />
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
               Created by {link.createdByName}, {formatDateTime(link.createdAt)} · Opened {link.viewCount} time{link.viewCount === 1 ? '' : 's'}
               {link.lastViewedAt ? `, last ${formatDateTime(link.lastViewedAt)}` : ''}
             </Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', rowGap: 1 }}>
-              <Button variant="contained" startIcon={<ContentCopyOutlined />} onClick={copy} disabled={!link.url}>Copy link</Button>
+              <Button variant="contained" startIcon={<ContentCopyOutlined />} onClick={copy} disabled={!url}>Copy link</Button>
               {!lockedOrder && <Button variant="outlined" startIcon={<AutorenewOutlined />} onClick={() => setConfirm('regenerate')}>Regenerate</Button>}
               <Button color="error" startIcon={<LinkOffOutlined />} onClick={() => setConfirm('revoke')}>Revoke</Button>
             </Stack>

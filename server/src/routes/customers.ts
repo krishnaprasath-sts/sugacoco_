@@ -3,14 +3,15 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { pool, withTransaction } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit, diff } from '../services/audit.js';
 import { AVAILABLE_SQL } from '../services/credit.js';
 
 export const customersRouter = Router();
-customersRouter.use(requireAuth, requireRole('SALES', 'ACCOUNTS', 'ADMIN'));
+// Anyone who works with customers or their money may look them up.
+customersRouter.use(requireAuth, requirePermission('customers.manage', 'customers.view', 'orders.create', 'payments.record', 'credits.manage'));
 
 const optional = (max: number) =>
   z
@@ -121,7 +122,7 @@ customersRouter.get('/:id', async (req, res) => {
   res.json({ customer, orders, credit: await customerCredit(id) });
 });
 
-customersRouter.post('/', requireRole('SALES'), async (req, res) => {
+customersRouter.post('/', requirePermission('customers.manage'), async (req, res) => {
   const body = parse(customerSchema, req.body);
   const id = await withTransaction(async (conn) => {
     const cols = Object.keys(FIELD_TO_COLUMN);
@@ -137,7 +138,7 @@ customersRouter.post('/', requireRole('SALES'), async (req, res) => {
   res.status(201).json({ customer });
 });
 
-customersRouter.patch('/:id', requireRole('SALES'), async (req, res) => {
+customersRouter.patch('/:id', requirePermission('customers.manage'), async (req, res) => {
   const id = parse(z.coerce.number().int().positive(), req.params.id);
   const body = parse(customerSchema.partial(), req.body);
   const [[existing]] = await pool.query<RowDataPacket[]>(`SELECT ${COLUMNS} FROM customers c WHERE c.id = ?`, [id]);

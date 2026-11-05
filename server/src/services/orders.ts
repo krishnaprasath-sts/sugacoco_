@@ -1,10 +1,10 @@
 /** Order read helpers shared by routes. All pricing is stripped for users who may not see it. */
 import type { RowDataPacket } from 'mysql2';
 import { pool } from '../db/pool.js';
-import type { AuthUser } from '../auth/users.js';
+import { can, type AuthUser } from '../auth/users.js';
 import { HttpError } from '../middleware/error.js';
 import { canView, uploadCategoriesAt } from '../workflow/documents.js';
-import { isLocked, type OrderStatus } from '../workflow/statuses.js';
+import { isLocked, STATUS_PERMISSION, type OrderStatus } from '../workflow/statuses.js';
 import { closureChecklist } from '../routes/accounts.js';
 
 const QC_WORKING: OrderStatus[] = ['AWAITING_QC', 'QC_IN_PROGRESS', 'WAITING_FOR_MATERIALS', 'AWAITING_QUALITY_CHECK'];
@@ -81,7 +81,9 @@ export async function getOrderDetail(id: number, user: AuthUser) {
   );
   const [history] = await pool.query<RowDataPacket[]>(
     `SELECT h.id, h.from_status AS fromStatus, h.to_status AS toStatus, h.remarks, h.changed_at AS changedAt,
-            u.name AS changedByName, r.code AS changedByRole
+            u.name AS changedByName, r.name AS changedByRole,
+            EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = u.role_id
+                    AND rp.permission IN ('payments.verify', 'orders.close', 'credits.manage')) AS byFinance
      FROM order_status_history h JOIN users u ON u.id = h.changed_by JOIN roles r ON r.id = u.role_id
      WHERE h.order_id = ? ORDER BY h.changed_at, h.id`,
     [id],
@@ -151,9 +153,10 @@ export async function getOrderDetail(id: number, user: AuthUser) {
   }
 
   const locked = isLocked(order.status);
-  const role = user.role;
-  const isSales = role === 'SALES';
-  const editable = isSales && !locked && (await salesCanEdit(id, order.status));
+  const canRecord = can(user, 'payments.record');
+  // Order details, advance and credit use can change only until Accounts approves the advance.
+  const earlyStage = !locked && (can(user, 'orders.create') || canRecord) && (await salesCanEdit(id, order.status));
+  const editable = earlyStage && can(user, 'orders.create');
   const hasPendingAdvance = payments.some((p) => p.paymentType === 'ADVANCE' && p.status === 'PENDING');
   const hasApprovedAdvance = payments.some((p) => p.paymentType === 'ADVANCE' && p.status === 'APPROVED');
   const hasOpenBalance = payments.some((p) => p.paymentType === 'BALANCE' && (p.status === 'PENDING' || p.status === 'APPROVED'));
@@ -163,7 +166,7 @@ export async function getOrderDetail(id: number, user: AuthUser) {
   const verifyType =
     order.status === 'AWAITING_ADVANCE_VERIFICATION' ? 'ADVANCE' : order.status === 'AWAITING_BALANCE_VERIFICATION' ? 'BALANCE' : null;
   const verifyPaymentId =
-    role === 'ACCOUNTS' && verifyType
+    can(user, 'payments.verify') && verifyType
       ? (payments.find((p) => p.paymentType === verifyType && p.status === 'PENDING')?.id ?? null)
       : null;
 
@@ -174,8 +177,8 @@ export async function getOrderDetail(id: number, user: AuthUser) {
     items: user.canViewPricing ? items : items.map((i) => stripPricing(i, FINANCIAL_ITEM_FIELDS)),
     documents: documents.filter((d) => canView(user, d.category)),
     payments,
-    // Accounts' notes can mention amounts; QC/Packaging only see the status change itself.
-    history: user.canViewPricing ? history : history.map((h) => (h.changedByRole === 'ACCOUNTS' ? { ...h, remarks: null } : h)),
+    // Notes from people who handle money (Accounts) can mention amounts; others only see the status change itself.
+    history: history.map(({ byFinance, ...h }) => (!user.canViewPricing && Number(byFinance) ? { ...h, remarks: null } : h)),
     qcUpdates,
     packagingUpdates,
     containers,
@@ -183,27 +186,29 @@ export async function getOrderDetail(id: number, user: AuthUser) {
     credits,
     cancellation: cancellation ?? null,
     closureChecklist:
-      (role === 'ACCOUNTS' || role === 'ADMIN') && order.status === 'AWAITING_FINAL_VERIFICATION' ? await closureChecklist(id) : null,
+      can(user, 'orders.close', 'overview.view') && order.status === 'AWAITING_FINAL_VERIFICATION' ? await closureChecklist(id) : null,
     permissions: {
       canEdit: editable,
-      canRecordAdvance: editable && !hasPendingAdvance && !hasApprovedAdvance,
+      canRecordAdvance: earlyStage && canRecord && !hasPendingAdvance && !hasApprovedAdvance,
       canRecordBalance:
-        isSales && ['DOCUMENTATION_IN_PROGRESS', 'BALANCE_REJECTED'].includes(order.status) && allLoaded && !hasOpenBalance,
-      balanceWaitingForLoading: isSales && order.status === 'DOCUMENTATION_IN_PROGRESS' && !allLoaded,
-      canApplyCredit: editable,
+        canRecord && ['DOCUMENTATION_IN_PROGRESS', 'BALANCE_REJECTED'].includes(order.status) && allLoaded && !hasOpenBalance,
+      balanceWaitingForLoading: canRecord && order.status === 'DOCUMENTATION_IN_PROGRESS' && !allLoaded,
+      canApplyCredit: earlyStage && canRecord,
       uploadCategories: uploadCategoriesAt(user, order.status),
       canViewPricing: user.canViewPricing,
       verifyPaymentId,
-      canUpdateQc: role === 'QC' && QC_WORKING.includes(order.status),
-      canUpdatePackaging: role === 'PACKAGING' && PACKAGING_WORKING.includes(order.status),
-      canEditContainers: role === 'DOCUMENTATION' && docsStage,
-      canGateIn: role === 'DOCUMENTATION' && order.status === 'AWAITING_DOCUMENT_RELEASE',
-      canRelease: role === 'DOCUMENTATION' && order.status === 'AWAITING_DOCUMENT_RELEASE',
-      canClose: role === 'ACCOUNTS' && order.status === 'AWAITING_FINAL_VERIFICATION',
-      canCancel: role === 'ADMIN' && !locked,
-      canManageTracking: role === 'SALES' || role === 'ADMIN',
+      canUpdateQc: can(user, 'qc.work') && QC_WORKING.includes(order.status),
+      canUpdatePackaging: can(user, 'packaging.work') && PACKAGING_WORKING.includes(order.status),
+      canEditContainers: can(user, 'documentation.work') && docsStage,
+      canGateIn: can(user, 'documentation.work') && order.status === 'AWAITING_DOCUMENT_RELEASE',
+      canRelease: can(user, 'documentation.work') && order.status === 'AWAITING_DOCUMENT_RELEASE',
+      canClose: can(user, 'orders.close') && order.status === 'AWAITING_FINAL_VERIFICATION',
+      canCancel: can(user, 'orders.cancel') && !locked,
+      canManageTracking: can(user, 'tracking.manage'),
+      /** The current stage waits on someone with this user's permissions. */
+      yourTurn: !!STATUS_PERMISSION[order.status] && can(user, STATUS_PERMISSION[order.status]!),
       confirmNoPaymentType:
-        role !== 'ACCOUNTS'
+        !can(user, 'payments.verify')
           ? null
           : order.status === 'AWAITING_ADVANCE_VERIFICATION' && Number(order.advanceAmount) === 0
             ? 'ADVANCE'

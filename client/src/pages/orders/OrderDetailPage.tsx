@@ -24,7 +24,8 @@ import PaymentsOutlined from '@mui/icons-material/PaymentsOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import { useOrder, type OrderDetail, type Payment } from '../../api/orders';
 import { useMe } from '../../auth/useAuth';
-import { ROLE_HOME, ROLE_LABEL } from '../../auth/roles';
+import { can, DEPARTMENT_LABEL } from '../../auth/roles';
+import { homePath, ordersListFor } from '../../nav/navConfig';
 import { STATUS, PACKAGING_STATUS_LABEL, QC_STATUS_LABEL, isLocked } from '../../workflow/statuses';
 import { formatDate, formatDateTime, formatMoney } from '../../lib/format';
 import { formError } from '../../lib/formErrors';
@@ -78,7 +79,7 @@ export default function OrderDetailPage() {
     const hash = window.location.hash.slice(1);
     if (loaded && hash) setTimeout(() => document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' }), 100);
   }, [loaded]);
-  const home = me ? ROLE_HOME[me.role] : '/';
+  const home = me ? homePath(me) : '/';
 
   if (!validId) {
     return (
@@ -109,20 +110,7 @@ export default function OrderDetailPage() {
   const locked = isLocked(order.status);
   // Came here from another screen in the app? "Back" returns there (keeps filters/search). Otherwise go to the role's list.
   const cameFromApp = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0;
-  const roleBack =
-    me?.role === 'SALES'
-      ? { to: '/sales/orders', label: 'My orders' }
-      : me?.role === 'ACCOUNTS'
-        ? { to: '/accounts', label: 'Verification queue' }
-        : me?.role === 'QC'
-          ? { to: '/qc', label: 'QC work queue' }
-          : me?.role === 'PACKAGING'
-            ? { to: '/packaging', label: 'Packaging queue' }
-            : me?.role === 'DOCUMENTATION'
-              ? { to: '/documentation', label: 'Documentation queue' }
-              : me?.role === 'ADMIN'
-                ? { to: '/admin/orders', label: 'All orders' }
-                : { to: home, label: 'Back' };
+  const roleBack = ordersListFor(me);
   const back = cameFromApp ? { to: roleBack.to, label: 'Back', onClick: () => navigate(-1) } : roleBack;
   const actionCardFirst =
     !!permissions.verifyPaymentId ||
@@ -177,7 +165,7 @@ export default function OrderDetailPage() {
             : `Closed${order.closedAt ? ` on ${formatDateTime(order.closedAt)}` : ''}. The order is read-only.`}
         </Alert>
       )}
-      {rejected && me?.role === 'SALES' ? (
+      {rejected && can(me, 'payments.record') ? (
         <Alert
           severity="error"
           sx={{ mb: 2 }}
@@ -197,7 +185,7 @@ export default function OrderDetailPage() {
         !locked &&
         status.owner && (
           <Alert severity={status.color === 'error' ? 'error' : 'info'} sx={{ mb: 2 }}>
-            {status.owner === me?.role ? 'Waiting for your action. ' : `Waiting for ${ROLE_LABEL[status.owner]}. `}
+            {permissions.yourTurn ? 'Waiting for your action. ' : `Waiting for ${DEPARTMENT_LABEL[status.owner]}. `}
             Current stage: {status.label}.
           </Alert>
         )
@@ -281,8 +269,13 @@ export default function OrderDetailPage() {
                     {[customer.email, customer.phone].filter(Boolean).join(' · ')}
                   </Typography>
                 )}
-                {me?.role === 'SALES' && (
-                  <Button component={RouterLink} to={`/sales/customers/${customer.id}`} size="small" sx={{ mt: 1, ml: -1 }}>
+                {can(me, 'customers.manage', 'customers.view') && (
+                  <Button
+                    component={RouterLink}
+                    to={`${can(me, 'customers.manage') ? '/sales/customers' : '/admin/customers'}/${customer.id}`}
+                    size="small"
+                    sx={{ mt: 1, ml: -1 }}
+                  >
                     Customer history
                   </Button>
                 )}
@@ -491,7 +484,7 @@ function HistoryCard({ history }: { history: OrderDetail['history'] }) {
               <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 600, fontSize: 14 }}>{STATUS[h.toStatus].label}</Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  {h.changedByName} ({ROLE_LABEL[h.changedByRole]}) · {formatDateTime(h.changedAt)}
+                  {h.changedByName} ({h.changedByRole}) · {formatDateTime(h.changedAt)}
                 </Typography>
                 {h.remarks && <Typography variant="body2" sx={{ mt: 0.25 }}>{h.remarks}</Typography>}
               </Box>

@@ -2,14 +2,16 @@
  * Create or update a user from the command line.
  *   npm run user:create -- --name "MD" --email md@sugacoco.com --role ADMIN --password "Secret@123"
  * Re-running with the same email updates name, role and password.
+ * --role is a role code from the roles table (SALES, ACCOUNTS, QC, PACKAGING, DOCUMENTATION, ADMIN or a custom role's code).
  */
 import { parseArgs } from 'node:util';
 import { hashPassword } from '../auth/password.js';
 import { pool } from './pool.js';
-import { ROLES, isRole } from '../auth/roles.js';
+import type { RowDataPacket } from 'mysql2';
 
 export async function upsertUser(name: string, email: string, role: string, password: string) {
-  if (!isRole(role)) throw new Error(`Role must be one of: ${ROLES.join(', ')}`);
+  const [roles] = await pool.query<RowDataPacket[]>('SELECT code FROM roles ORDER BY id');
+  if (!roles.some((r) => r.code === role)) throw new Error(`Role must be one of: ${roles.map((r) => r.code).join(', ')}`);
   if (password.length < 8) throw new Error('Password must be at least 8 characters');
 
   const hash = await hashPassword(password);

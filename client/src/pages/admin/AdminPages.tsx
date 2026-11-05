@@ -1,4 +1,5 @@
 /** MD/Admin screens: overview, pending actions, cancellations. */
+import { useUrlPage, useUrlState } from '../../lib/useUrlState';
 import {
   Box,
   Card,
@@ -19,8 +20,8 @@ import HourglassEmptyOutlined from '@mui/icons-material/HourglassEmptyOutlined';
 import AccountBalanceWalletOutlined from '@mui/icons-material/AccountBalanceWalletOutlined';
 import BlockOutlined from '@mui/icons-material/BlockOutlined';
 import { useMe } from '../../auth/useAuth';
-import { ROLE_LABEL, type Role } from '../../auth/roles';
-import { useMemo, useState } from 'react';
+import { DEPARTMENT_LABEL as ROLE_LABEL, type Department } from '../../auth/roles';
+import { useMemo } from 'react';
 import { useAdminSummary, useCancellations, usePendingActions } from '../../api/stages';
 import ListPagination from '../../components/ListPagination';
 import { usePaged } from '../../lib/usePaged';
@@ -41,7 +42,7 @@ import ResponsiveTable, { OrderLink } from '../../components/ResponsiveTable';
 /** "Latest activity" table on the overview. Hidden for now; set to true to show it again. */
 const SHOW_LATEST_ACTIVITY = false;
 
-const DEPTS: Role[] = ['SALES', 'ACCOUNTS', 'QC', 'PACKAGING', 'DOCUMENTATION'];
+const DEPTS: Department[] = ['SALES', 'ACCOUNTS', 'QC', 'PACKAGING', 'DOCUMENTATION'];
 const PAYMENT_STAGES: OrderStatus[] = ['AWAITING_ADVANCE_VERIFICATION', 'AWAITING_BALANCE_VERIFICATION'];
 const PRODUCTION_STAGES: OrderStatus[] = ['AWAITING_QC', 'QC_IN_PROGRESS', 'WAITING_FOR_MATERIALS', 'AWAITING_QUALITY_CHECK', 'AWAITING_PACKAGING', 'PACKAGING_IN_PROGRESS', 'PACKAGING_ON_HOLD', 'PACKAGING_ISSUE'];
 const SHIPPING_STAGES: OrderStatus[] = ['READY_FOR_DOCUMENTATION', 'DOCUMENTATION_IN_PROGRESS', 'BALANCE_REJECTED', 'AWAITING_DOCUMENT_RELEASE'];
@@ -193,9 +194,12 @@ const LATE_HOURS = 72;
 export function PendingActionsPage() {
   const { data, isPending, error, refetch } = usePendingActions();
   const all = useMemo(() => [...(data?.orders ?? [])].sort((a, b) => b.hoursWaiting - a.hoursWaiting), [data]);
-  const [dept, setDept] = useState<Role | 'ALL'>('ALL');
-  const [lateOnly, setLateOnly] = useState(false);
-  const [search, setSearch] = useState('');
+  // Kept in the URL so Back from an order returns to the same filter, search and page.
+  const [deptRaw, setDept] = useUrlState('dept', 'ALL');
+  const dept = deptRaw as Department | 'ALL';
+  const [lateRaw, setLateRaw] = useUrlState('late');
+  const lateOnly = lateRaw === '1';
+  const [search, setSearch] = useUrlState('q');
   const term = search.trim().toLowerCase();
   const shown = all.filter(
     (o) =>
@@ -204,7 +208,7 @@ export function PendingActionsPage() {
       (!term || [o.orderNo, o.piNumber, o.customerName].some((v) => v?.toLowerCase().includes(term))),
   );
   const { pageItems, page, setPage, total, pageSize } = usePaged(shown, undefined, `${dept}|${lateOnly}|${term}`);
-  const count = (d: Role) => all.filter((o) => o.owner === d).length;
+  const count = (d: Department) => all.filter((o) => o.owner === d).length;
   const late = all.filter((o) => o.hoursWaiting >= LATE_HOURS).length;
 
   return (
@@ -222,7 +226,7 @@ export function PendingActionsPage() {
             label={`Late, 3+ days (${late})`}
             color={lateOnly ? 'error' : late ? 'error' : 'default'}
             variant={lateOnly ? 'filled' : 'outlined'}
-            onClick={() => setLateOnly((v) => !v)}
+            onClick={() => setLateRaw(lateOnly ? '' : '1')}
             aria-pressed={lateOnly}
           />
         </Stack>
@@ -239,6 +243,7 @@ export function PendingActionsPage() {
         />
       </Stack>
 
+      <ListPagination page={page} pageSize={pageSize} total={total} onChange={setPage} noun="orders" placement="top" />
       <Card>
         <ResponsiveTable
           ariaLabel="Pending orders"
@@ -277,12 +282,13 @@ export function PendingActionsPage() {
 }
 
 export function CancellationsPage() {
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useUrlPage();
   const [pageSize] = usePageSize();
   const { data, isPending, error, refetch } = useCancellations(page, pageSize);
   return (
     <Box>
       <PageHeader overline="MD / Admin" title="Cancellations" subtitle="Cancelled orders / PIs. Open an order and use Cancel order to add one." />
+      <ListPagination page={page} pageSize={pageSize} total={data?.total ?? 0} onChange={setPage} noun="cancellations" placement="top" />
       <Card>
         {error ? <ErrorState error={error} onRetry={() => refetch()} compact /> : isPending ? <Skeleton height={120} /> : !data?.cancellations.length ? (
           <EmptyState icon={<BlockOutlined />} title="No cancelled orders" />

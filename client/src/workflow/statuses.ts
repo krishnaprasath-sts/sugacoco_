@@ -1,5 +1,5 @@
 /** Mirror of server/src/workflow/statuses.ts (labels + display colors). Keep both in sync. */
-import type { Role } from '../auth/roles';
+import type { Department } from '../auth/roles';
 
 export type OrderStatus =
   | 'AWAITING_ADVANCE_VERIFICATION'
@@ -24,7 +24,7 @@ export type OrderStatus =
 type ChipColor = 'default' | 'info' | 'warning' | 'success' | 'error';
 
 /** Label, chip color, and which department acts next. Color is never the only signal: the label is always shown. */
-export const STATUS: Record<OrderStatus, { label: string; color: ChipColor; owner: Role | null }> = {
+export const STATUS: Record<OrderStatus, { label: string; color: ChipColor; owner: Department | null }> = {
   AWAITING_ADVANCE_VERIFICATION: { label: 'Awaiting Advance Verification', color: 'warning', owner: 'ACCOUNTS' },
   ADVANCE_REJECTED: { label: 'Advance Payment Rejected', color: 'error', owner: 'SALES' },
   AWAITING_QC: { label: 'Awaiting QC', color: 'warning', owner: 'QC' },

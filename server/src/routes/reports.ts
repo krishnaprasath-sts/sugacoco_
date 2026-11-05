@@ -4,21 +4,21 @@ import { sendExport } from '../services/exportFiles.js';
 import { z } from 'zod';
 import type { RowDataPacket } from 'mysql2';
 import { pool } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { parse } from '../middleware/validate.js';
 import { ORDER_STATUSES, STATUS_LABEL, type OrderStatus } from '../workflow/statuses.js';
 import { RECEIVED_BY_ORDER } from '../services/received.js';
 import { AVAILABLE_SQL } from '../services/credit.js';
 
 export const reportsRouter = Router();
-reportsRouter.use(requireAuth, requireRole('ADMIN', 'ACCOUNTS'));
+reportsRouter.use(requireAuth);
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional();
 
 const format = z.enum(['json', 'csv', 'xlsx', 'pdf']).default('json');
 const money2 = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-reportsRouter.get('/orders', async (req, res) => {
+reportsRouter.get('/orders', requirePermission('reports.view'), async (req, res) => {
   const q = parse(
     z.object({
       from: date,
@@ -120,7 +120,7 @@ reportsRouter.get('/orders', async (req, res) => {
 });
 
 /** Per customer: orders, value, received, outstanding, withheld available, refunded. */
-reportsRouter.get('/customers', async (req, res) => {
+reportsRouter.get('/customers', requirePermission('reports.view'), async (req, res) => {
   const fmt = parse(format, req.query.format);
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT c.id AS customerId, c.company_name AS customerName, o.currency,
@@ -170,7 +170,7 @@ reportsRouter.get('/customers', async (req, res) => {
 });
 
 /** Modification history. MD/Admin only. */
-reportsRouter.get('/audit', requireRole('ADMIN'), async (req, res) => {
+reportsRouter.get('/audit', requirePermission('audit.view'), async (req, res) => {
   const q = parse(
     z.object({
       from: date,
@@ -193,7 +193,7 @@ reportsRouter.get('/audit', requireRole('ADMIN'), async (req, res) => {
   const [[count]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM audit_logs a LEFT JOIN orders o ON o.id = a.order_id ${whereSql}`, params);
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT a.id, a.action, a.entity_type AS entityType, a.entity_id AS entityId, a.changes, a.ip_address AS ipAddress,
-            a.created_at AS createdAt, u.name AS userName, r.code AS userRole, o.id AS orderId, o.order_no AS orderNo
+            a.created_at AS createdAt, u.name AS userName, r.name AS userRole, o.id AS orderId, o.order_no AS orderNo
      FROM audit_logs a
      LEFT JOIN users u ON u.id = a.user_id LEFT JOIN roles r ON r.id = u.role_id
      LEFT JOIN orders o ON o.id = a.order_id

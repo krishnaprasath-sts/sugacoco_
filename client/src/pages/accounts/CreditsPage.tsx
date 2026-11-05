@@ -1,3 +1,4 @@
+import { useUrlPage } from '../../lib/useUrlState';
 import { useState, type FormEvent } from 'react';
 import { Link as RouterLink } from 'react-router';
 import {
@@ -191,7 +192,7 @@ function PendingRow({ e }: { e: CreditEntry }) {
 }
 
 export default function CreditsPage() {
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useUrlPage();
   const [pageSize] = usePageSize();
   const { data, isPending, error, refetch } = useCredits(page, pageSize);
   const [adding, setAdding] = useState(false);
@@ -236,6 +237,7 @@ export default function CreditsPage() {
       </Card>
 
       <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>All entries</Typography>
+      <ListPagination page={page} pageSize={pageSize} total={data?.total ?? 0} onChange={setPage} noun="entries" placement="top" />
       <Card>
         {isPending ? <Skeleton height={120} /> : !data?.entries.length ? (
           <EmptyState title="No entries" />

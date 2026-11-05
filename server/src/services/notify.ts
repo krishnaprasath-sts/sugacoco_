@@ -1,7 +1,7 @@
 /** In-app notifications: tell the team that now owns an order, and the Sales person who created it. */
 import type { PoolConnection, RowDataPacket } from 'mysql2/promise';
-import { PRICE_RESTRICTED_ROLES } from '../auth/roles.js';
-import { STATUS_LABEL, STATUS_OWNER, type OrderStatus } from '../workflow/statuses.js';
+import { parsePermissions, seesPricing } from '../auth/users.js';
+import { STATUS_LABEL, STATUS_PERMISSION, type OrderStatus } from '../workflow/statuses.js';
 
 // Sales hears about these even though another team owns the next step.
 const TELL_SALES: OrderStatus[] = [
@@ -22,14 +22,20 @@ export async function notifyStatusChange(conn: PoolConnection, actorId: number, 
   );
   if (!order) return;
 
-  const owner = STATUS_OWNER[to];
-  const [team] = owner
-    ? await conn.query<RowDataPacket[]>(`SELECT u.id, r.code AS role, u.can_view_pricing FROM users u JOIN roles r ON r.id = u.role_id
-         WHERE r.code = ? AND u.is_active = 1`, [owner])
+  // Everyone whose role has the permission for the next step.
+  const next = STATUS_PERMISSION[to];
+  const [team] = next
+    ? await conn.query<RowDataPacket[]>(
+        `SELECT u.id, u.can_view_pricing,
+                (SELECT GROUP_CONCAT(rp.permission) FROM role_permissions rp WHERE rp.role_id = u.role_id) AS permissions
+         FROM users u
+         WHERE u.is_active = 1 AND EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = u.role_id AND rp.permission = ?)`,
+        [next],
+      )
     : [[] as RowDataPacket[]];
   // Remarks can mention amounts, so people who can't see pricing get the short message.
   const recipients = new Map<number, boolean>(
-    team.map((u) => [Number(u.id), !PRICE_RESTRICTED_ROLES.includes(u.role) || u.can_view_pricing === 1]),
+    team.map((u) => [Number(u.id), seesPricing(parsePermissions(u.permissions), u.can_view_pricing)]),
   );
   if (TELL_SALES.includes(to)) recipients.set(Number(order.createdBy), true);
   recipients.delete(actorId); // don't notify people about their own action

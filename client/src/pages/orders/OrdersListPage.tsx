@@ -68,6 +68,7 @@ export default function OrdersListPage({ overline, title, subtitle, statuses }: 
           </TextField>
         )}
       </Stack>
+      <ListPagination page={page} pageSize={pageSize} total={data?.total ?? 0} onChange={setPage} noun="orders" placement="top" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : !isPending && data?.orders.length === 0 ? (

@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express';
 import { AUTH_COOKIE, verifyToken } from '../auth/token.js';
-import { findActiveUserById, toAuthUser, type AuthUser } from '../auth/users.js';
-import type { Role } from '../auth/roles.js';
+import { can, findActiveUserById, toAuthUser, type AuthUser } from '../auth/users.js';
+import type { Permission } from '../auth/permissions.js';
 import { HttpError } from './error.js';
 
 declare global {
@@ -15,7 +15,7 @@ declare global {
 
 /**
  * Checks the session cookie and loads the user from the DB on every request,
- * so a deactivated user or changed role takes effect immediately.
+ * so a deactivated user, changed role or changed role permissions take effect immediately.
  */
 export const requireAuth: RequestHandler = async (req, _res, next) => {
   const token = verifyToken(req.cookies?.[AUTH_COOKIE]);
@@ -29,10 +29,13 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   next();
 };
 
-/** Use after requireAuth. Example: router.post('/', requireRole('ACCOUNTS'), handler) */
-export function requireRole(...roles: Role[]): RequestHandler {
+/**
+ * Use after requireAuth. Passes if the user's role has ANY of the given permissions.
+ * Example: router.post('/', requirePermission('payments.verify'), handler)
+ */
+export function requirePermission(...anyOf: Permission[]): RequestHandler {
   return (req, _res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!can(req.user, ...anyOf)) {
       throw new HttpError(403, 'You do not have permission for this action');
     }
     next();

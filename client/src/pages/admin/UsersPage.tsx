@@ -25,7 +25,6 @@ import PersonAddAlt1Outlined from '@mui/icons-material/PersonAddAlt1Outlined';
 import EditOutlined from '@mui/icons-material/EditOutlined';
 import LockResetOutlined from '@mui/icons-material/LockResetOutlined';
 import { useMe } from '../../auth/useAuth';
-import { PRICE_RESTRICTED_ROLES, ROLE_LABEL } from '../../auth/roles';
 import { formError } from '../../lib/formErrors';
 import { formatDateTime } from '../../lib/format';
 import PageHeader from '../../components/PageHeader';
@@ -59,8 +58,8 @@ function UserIdentity({ user, isSelf }: { user: ManagedUser; isSelf: boolean }) 
 function RoleChips({ user }: { user: ManagedUser }) {
   return (
     <>
-      <Chip label={ROLE_LABEL[user.role]} size="small" variant="outlined" />
-      {PRICE_RESTRICTED_ROLES.includes(user.role) && user.canViewPricing && (
+      <Chip label={user.roleName} size="small" variant="outlined" />
+      {!user.roleSeesPricing && user.canViewPricing && (
         <Chip label="Can see pricing" size="small" color="warning" variant="outlined" />
       )}
     </>
@@ -135,7 +134,7 @@ export default function UsersPage() {
       <PageHeader
         overline="Administration"
         title="Manage Users"
-        subtitle="Add staff, set their department, and reset passwords."
+        subtitle="Add staff, choose their role, and reset passwords. What each role can do is set under Roles & Permissions."
         actions={
           <Button variant="contained" startIcon={<PersonAddAlt1Outlined />} onClick={() => setDialog({ kind: 'add' })} fullWidth={!isDesktop}>
             Add user

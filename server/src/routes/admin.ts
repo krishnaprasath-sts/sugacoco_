@@ -3,11 +3,11 @@ import { Router } from 'express';
 import type { RowDataPacket } from 'mysql2';
 import { RECEIVED_BY_ORDER } from '../services/received.js';
 import { pool } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { STATUS_OWNER, type OrderStatus } from '../workflow/statuses.js';
 
 export const adminRouter = Router();
-adminRouter.use(requireAuth, requireRole('ADMIN'));
+adminRouter.use(requireAuth, requirePermission('overview.view'));
 
 adminRouter.get('/summary', async (_req, res) => {
   const [statusRows] = await pool.query<RowDataPacket[]>('SELECT status, COUNT(*) AS n FROM orders GROUP BY status');

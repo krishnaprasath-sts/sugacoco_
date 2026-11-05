@@ -25,8 +25,7 @@ import {
 import HamburgerIcon from '../components/HamburgerIcon';
 import LogoutOutlined from '@mui/icons-material/LogoutOutlined';
 import { useLogout, useMe } from '../auth/useAuth';
-import { ROLE_LABEL } from '../auth/roles';
-import { NAV, type NavItem } from '../nav/navConfig';
+import { navFor, SHARED_SECTIONS, type NavItem } from '../nav/navConfig';
 import Logo from '../components/Logo';
 import { ACTIVE_PILL, BRAND, SIDEBAR_GRADIENT } from '../theme';
 
@@ -89,7 +88,7 @@ export default function AppLayout() {
   const location = useLocation();
 
   if (!user) return null;
-  const items = NAV[user.role];
+  const items = navFor(user);
   // Longest matching path wins, so /sales/orders/new doesn't also highlight /sales/orders.
   const under = (p: string) => location.pathname === p || location.pathname.startsWith(p + '/');
   const activePath =
@@ -99,9 +98,11 @@ export default function AppLayout() {
       .sort((a, b) => b.length - a.length)[0] ?? items.find((i) => i.also?.some(under))?.path;
   const showSidebar = isDesktop && !collapsed;
 
-  // Group menu items by section (Home, Administration), keeping order.
+  // Group menu items by section, keeping order. Someone working in just one department sees it as "Home";
+  // a role that spans departments (e.g. Sales + Accounts) gets a heading per department.
+  const deptSections = new Set(items.map((i) => i.section).filter((s) => !SHARED_SECTIONS.includes(s)));
   const sections = items.reduce<{ title: string; items: NavItem[] }[]>((acc, item) => {
-    const title = item.section ?? 'Home';
+    const title = deptSections.size <= 1 && !SHARED_SECTIONS.includes(item.section) ? 'Home' : item.section;
     const last = acc[acc.length - 1];
     if (last?.title === title) last.items.push(item);
     else acc.push({ title, items: [item] });
@@ -131,7 +132,25 @@ export default function AppLayout() {
         <Logo height={56} />
       </Box>
 
-      <Box component="nav" aria-label="Main" sx={{ flex: 1, overflowY: 'auto', px: 1.75, pb: 2 }}>
+      <Box
+        component="nav"
+        aria-label="Main"
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          px: 1.75,
+          pb: 2,
+          // Long menus (MD/Admin) scroll: thin see-through bar instead of the grey Windows one.
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(255,255,255,0.22) transparent',
+          '&::-webkit-scrollbar': { width: 6 },
+          '&::-webkit-scrollbar-track': { background: 'transparent' },
+          '&::-webkit-scrollbar-thumb': { background: 'rgba(255,255,255,0.22)', borderRadius: 999 },
+          '&::-webkit-scrollbar-thumb:hover': { background: 'rgba(255,255,255,0.38)' },
+          '&::-webkit-scrollbar-button': { display: 'none', height: 0 },
+        }}
+      >
         {sections.map((section) => (
           <List
             key={section.title}
@@ -190,7 +209,7 @@ export default function AppLayout() {
       </Box>
 
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mx: 2.25 }} />
-      <Typography sx={{ px: 3, py: 1.75, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Sugacoco · {ROLE_LABEL[user.role]}</Typography>
+      <Typography sx={{ px: 3, py: 1.75, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Sugacoco · {user.roleName}</Typography>
     </Box>
   );
 
@@ -246,7 +265,7 @@ export default function AppLayout() {
           >
             <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
               <Typography sx={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.2 }}>{user.name}</Typography>
-              <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{ROLE_LABEL[user.role]}</Typography>
+              <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{user.roleName}</Typography>
             </Box>
             <Avatar
               sx={{
