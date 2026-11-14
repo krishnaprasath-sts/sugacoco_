@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { pool, withTransaction } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit } from '../services/audit.js';
@@ -13,7 +13,7 @@ import { amount, optionalDate } from '../lib/validation.js';
 import type { OrderStatus } from '../workflow/statuses.js';
 
 export const paymentsRouter = Router();
-paymentsRouter.use(requireAuth, requireRole('ACCOUNTS'));
+paymentsRouter.use(requireAuth, requirePermission('payments.verify'));
 
 type PaymentType = 'ADVANCE' | 'BALANCE';
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useUrlPage } from '../../lib/useUrlState';
 import { Box, Card, Stack, Typography } from '@mui/material';
 import ListPagination from '../../components/ListPagination';
 import { usePageSize } from '../../lib/pageSize';
@@ -10,7 +10,7 @@ import ErrorState from '../../components/ErrorState';
 import OrdersTable from '../orders/OrdersTable';
 
 function Section({ title, hint, statuses }: { title: string; hint: string; statuses: Parameters<typeof useOrders>[0]['status'] }) {
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useUrlPage();
   const [pageSize] = usePageSize();
   const { data, isPending, error, refetch } = useOrders({ status: statuses, page, pageSize });
   return (
@@ -21,6 +21,7 @@ function Section({ title, hint, statuses }: { title: string; hint: string; statu
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
         {hint}
       </Typography>
+      <ListPagination page={page} pageSize={pageSize} total={data?.total ?? 0} onChange={setPage} noun="orders" placement="top" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : !isPending && !data?.orders.length ? (

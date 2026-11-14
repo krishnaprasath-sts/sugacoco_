@@ -12,65 +12,25 @@ type Props = {
   inset?: boolean;
   /** Show the "Show N entries" picker (off for small fixed lists). */
   sizeSelector?: boolean;
+  /**
+   * top = "Show [10] entries · Showing 1–10 of 132" above the list.
+   * bottom (default) = page numbers under the list.
+   */
+  placement?: 'top' | 'bottom';
 };
 
-/** "Show [10] entries · Showing 1–10 of 132" + page numbers. Renders nothing for an empty list. */
-export default function ListPagination({ page, pageSize, total, onChange, noun = 'items', inset = false, sizeSelector = true }: Props) {
+/** Lists put one bar on top (entries + count) and one at the bottom (page numbers). Renders nothing for an empty list. */
+export default function ListPagination({ page, pageSize, total, onChange, noun = 'items', inset = false, sizeSelector = true, placement = 'bottom' }: Props) {
   const [, setPageSize] = usePageSize();
   if (!total) return null;
   const pages = Math.ceil(total / pageSize);
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
-  return (
-    <Stack
-      direction={{ xs: 'column', sm: 'row' }}
-      spacing={1.5}
-      sx={{ mt: inset ? 0 : 2, px: inset ? 2.5 : 0, py: inset ? 1.5 : 0, alignItems: 'center', justifyContent: 'space-between' }}
-    >
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-        {sizeSelector && (
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Show
-            </Typography>
-            <TextField
-              select
-              size="small"
-              fullWidth={false}
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                onChange(1);
-              }}
-              sx={{ width: 84, '& .MuiSelect-select': { py: '6px' } }}
-              slotProps={{
-                htmlInput: { 'aria-label': 'Rows per page' },
-                // Sits at the page bottom: open upwards so the menu never covers the box.
-                select: {
-                  MenuProps: {
-                    anchorOrigin: { vertical: 'top', horizontal: 'left' },
-                    transformOrigin: { vertical: 'bottom', horizontal: 'left' },
-                    slotProps: { paper: { sx: { mt: '-4px' } } },
-                  },
-                },
-              }}
-            >
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <MenuItem key={n} value={n}>
-                  {n}
-                </MenuItem>
-              ))}
-            </TextField>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              entries
-            </Typography>
-          </Stack>
-        )}
-        <Typography variant="body2" sx={{ color: 'text.secondary' }} aria-live="polite">
-          Showing {from}–{to} of {total} {noun}
-        </Typography>
-      </Stack>
-      {pages > 1 && (
+
+  if (placement === 'bottom') {
+    if (pages <= 1) return null;
+    return (
+      <Stack direction="row" sx={{ mt: inset ? 0 : 2, px: inset ? 2.5 : 0, py: inset ? 1.5 : 0, justifyContent: { xs: 'center', sm: 'flex-end' } }}>
         <Pagination
           count={pages}
           page={Math.min(page, pages)}
@@ -82,7 +42,47 @@ export default function ListPagination({ page, pageSize, total, onChange, noun =
           color="primary"
           size="small"
         />
+      </Stack>
+    );
+  }
+
+  return (
+    <Stack
+      direction="row"
+      spacing={1.5}
+      sx={{ mb: inset ? 0 : 1.5, px: inset ? 2.5 : 0, py: inset ? 1.5 : 0, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 1 }}
+    >
+      {sizeSelector && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Show
+          </Typography>
+          <TextField
+            select
+            size="small"
+            fullWidth={false}
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              onChange(1);
+            }}
+            sx={{ width: 84, '& .MuiSelect-select': { py: '6px' } }}
+            slotProps={{ htmlInput: { 'aria-label': 'Rows per page' } }}
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <MenuItem key={n} value={n}>
+                {n}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            entries
+          </Typography>
+        </Stack>
       )}
+      <Typography variant="body2" sx={{ color: 'text.secondary' }} aria-live="polite">
+        Showing {from}–{to} of {total} {noun}
+      </Typography>
     </Stack>
   );
 }

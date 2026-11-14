@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
 import { usersRouter } from './routes/users.js';
+import { rolesRouter } from './routes/roles.js';
 import { customersRouter } from './routes/customers.js';
 import { productsRouter } from './routes/products.js';
 import { ordersRouter } from './routes/orders.js';
@@ -53,6 +54,7 @@ export function createApp() {
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
+  app.use('/api/roles', rolesRouter);
   app.use('/api/customers', customersRouter);
   app.use('/api/products', productsRouter);
   app.use('/api/orders', ordersRouter);

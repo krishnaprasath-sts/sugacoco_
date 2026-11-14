@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import type { PoolConnection } from 'mysql2/promise';
 import { withTransaction } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit, diff } from '../services/audit.js';
@@ -17,7 +17,7 @@ import type { OrderStatus } from '../workflow/statuses.js';
 import { optionalDate } from '../lib/validation.js';
 
 export const documentationRouter = Router();
-documentationRouter.use(requireAuth, requireRole('DOCUMENTATION'));
+documentationRouter.use(requireAuth, requirePermission('documentation.work'));
 
 /** Stages where Documentation can edit container records. */
 export const DOCS_EDITABLE: OrderStatus[] = [

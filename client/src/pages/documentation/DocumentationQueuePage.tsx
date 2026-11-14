@@ -64,6 +64,7 @@ export default function DocumentationQueuePage({ defaultTab = 'start' }: { defau
       </Tabs>
       {error && <ErrorState error={error} onRetry={() => refetch()} />}
       {tab === 'balance' && <Alert severity="info" sx={{ mb: 2 }}>Gate-in opens once Accounts approves the balance payment.</Alert>}
+      <ListPagination page={tabPaged.page} pageSize={tabPaged.pageSize} total={tabPaged.total} onChange={tabPaged.setPage} noun="orders" placement="top" />
       <Stack spacing={1.5}>
         {isPending && Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} variant="rounded" height={110} />)}
         {!error && !isPending && !inGroup(tab).length && (

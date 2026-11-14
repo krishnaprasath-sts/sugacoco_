@@ -69,6 +69,12 @@ export default function OrderFormPage() {
   const { data: suggestions = [] } = useProductSuggestions();
 
   const existing = useOrder(editId && editId > 0 ? editId : 0);
+  // Active products, plus any older product already saved on the order being edited.
+  const productOptions = useMemo(() => {
+    const names = suggestions.map((s) => s.name);
+    for (const i of existing.data?.items ?? []) if (!names.includes(i.productName)) names.push(i.productName);
+    return names;
+  }, [suggestions, existing.data]);
   const preselectId = editId ? null : Number(search.get('customerId')) || null;
   const preselect = useCustomer(preselectId);
 
@@ -338,14 +344,23 @@ export default function OrderFormPage() {
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <Autocomplete
-                              freeSolo
-                              options={suggestions.map((s) => s.name)}
-                              inputValue={item.productName}
-                              onInputChange={(_, v) => {
+                              options={productOptions}
+                              value={item.productName || null}
+                              onChange={(_, v) => {
                                 const unit = suggestions.find((s) => s.name === v)?.unit;
-                                updateItem(item.key, { productName: v, ...(unit && UNITS.includes(unit) ? { unit } : {}) });
+                                updateItem(item.key, { productName: v ?? '', ...(unit && UNITS.includes(unit) ? { unit } : {}) });
                               }}
-                              renderInput={(p) => <TextField {...p} label="Product" required error={!!e('productName')} helperText={e('productName')} />}
+                              noOptionsText="No matching product. Ask MD/Admin to add it."
+                              renderInput={(p) => (
+                                <TextField
+                                  {...p}
+                                  label="Product"
+                                  required
+                                  placeholder="Choose a product"
+                                  error={!!e('productName')}
+                                  helperText={e('productName') ?? (idx === 0 ? 'Not in the list? MD/Admin adds new products.' : undefined)}
+                                />
+                              )}
                             />
                           </Grid>
                           <Grid size={{ xs: 6, sm: 3 }}>

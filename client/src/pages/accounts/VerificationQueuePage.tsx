@@ -113,8 +113,8 @@ export default function VerificationQueuePage() {
   const tab: TabKey = TABS.includes(params.get('tab') as TabKey) ? (params.get('tab') as TabKey) : 'ready';
   const { data, isPending, error, refetch, dataUpdatedAt } = useVerificationQueue();
   const readyPaged = usePaged(data?.ready);
-  const waitingPaged = usePaged(data?.waitingForSales);
-  const recentPaged = usePaged(data?.recent);
+  const waitingPaged = usePaged(data?.waitingForSales, undefined, null, 'wpage');
+  const recentPaged = usePaged(data?.recent, undefined, null, 'rpage');
   const now = new Date(dataUpdatedAt || Date.now());
 
   const counts = { ready: data?.ready.length ?? 0, waiting: data?.waitingForSales.length ?? 0 };
@@ -173,6 +173,7 @@ export default function VerificationQueuePage() {
             </Card>
           ) : (
             <>
+              <ListPagination page={readyPaged.page} pageSize={readyPaged.pageSize} total={readyPaged.total} onChange={readyPaged.setPage} noun="payments" placement="top" />
               {readyPaged.pageItems.map((r) => <QueueCard key={`${r.id}-${r.paymentId}`} row={r} />)}
               <ListPagination page={readyPaged.page} pageSize={readyPaged.pageSize} total={readyPaged.total} onChange={readyPaged.setPage} noun="payments" />
             </>
@@ -189,6 +190,7 @@ export default function VerificationQueuePage() {
             </Card>
           ) : (
             <>
+              <ListPagination page={waitingPaged.page} pageSize={waitingPaged.pageSize} total={waitingPaged.total} onChange={waitingPaged.setPage} noun="orders" placement="top" />
               {waitingPaged.pageItems.map((r) => <QueueCard key={r.id} row={r} />)}
               <ListPagination page={waitingPaged.page} pageSize={waitingPaged.pageSize} total={waitingPaged.total} onChange={waitingPaged.setPage} noun="orders" />
             </>
@@ -196,6 +198,7 @@ export default function VerificationQueuePage() {
         </Stack>
       )}
 
+      {tab === 'recent' && <ListPagination page={recentPaged.page} pageSize={recentPaged.pageSize} total={recentPaged.total} onChange={recentPaged.setPage} noun="verifications" placement="top" />}
       {data && tab === 'recent' && (
         <Card>
           {data.recent.length === 0 ? (

@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { pool, withTransaction } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit } from '../services/audit.js';
@@ -45,7 +45,7 @@ export async function closureChecklist(orderId: number) {
   ];
 }
 
-accountsRouter.get('/final-queue', requireRole('ACCOUNTS'), async (_req, res) => {
+accountsRouter.get('/final-queue', requirePermission('orders.close'), async (_req, res) => {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.currency, o.total_value AS totalValue,
             o.status, o.status_changed_at AS statusChangedAt, c.company_name AS customerName,
@@ -57,11 +57,11 @@ accountsRouter.get('/final-queue', requireRole('ACCOUNTS'), async (_req, res) =>
   res.json({ orders: rows });
 });
 
-accountsRouter.get('/orders/:id/checklist', requireRole('ACCOUNTS', 'ADMIN'), async (req, res) => {
+accountsRouter.get('/orders/:id/checklist', requirePermission('orders.close', 'overview.view'), async (req, res) => {
   res.json({ items: await closureChecklist(parse(idParam, req.params.id)) });
 });
 
-accountsRouter.post('/orders/:id/close', requireRole('ACCOUNTS'), async (req, res) => {
+accountsRouter.post('/orders/:id/close', requirePermission('orders.close'), async (req, res) => {
   const id = parse(idParam, req.params.id);
   const remarks = parse(text(2000), req.body?.remarks);
   await withTransaction(async (conn) => {
@@ -77,7 +77,7 @@ accountsRouter.post('/orders/:id/close', requireRole('ACCOUNTS'), async (req, re
 
 // ───────────── Customer credit ledger ─────────────
 
-accountsRouter.get('/credits', requireRole('ACCOUNTS', 'ADMIN'), async (req, res) => {
+accountsRouter.get('/credits', requirePermission('credits.manage', 'customers.view'), async (req, res) => {
   const q = parse(
     z.object({
       status: z.enum(['PENDING', 'VERIFIED', 'REJECTED']).optional(),
@@ -130,7 +130,7 @@ accountsRouter.get('/credits', requireRole('ACCOUNTS', 'ADMIN'), async (req, res
 });
 
 /** Accounts records money withheld for future orders, or a refund paid back to the customer. */
-accountsRouter.post('/credits', requireRole('ACCOUNTS'), async (req, res) => {
+accountsRouter.post('/credits', requirePermission('credits.manage'), async (req, res) => {
   const body = parse(
     z.object({
       customerId: z.coerce.number({ error: 'Choose a customer' }).int().positive('Choose a customer'),
@@ -174,7 +174,7 @@ accountsRouter.post('/credits', requireRole('ACCOUNTS'), async (req, res) => {
 });
 
 /** Accounts verifies Sales' request to use credit on an order. Approved credit reduces that order's balance. */
-accountsRouter.post('/credits/:id/verify', requireRole('ACCOUNTS'), async (req, res) => {
+accountsRouter.post('/credits/:id/verify', requirePermission('credits.manage'), async (req, res) => {
   const id = parse(idParam, req.params.id);
   const body = parse(z.object({ decision: z.enum(['VERIFIED', 'REJECTED']), remarks: text(2000) }), req.body);
   await withTransaction(async (conn) => {
@@ -214,7 +214,7 @@ accountsRouter.post('/credits/:id/verify', requireRole('ACCOUNTS'), async (req, 
  * Advance 0 (or balance 0 after credit) means there is no payment to verify.
  * Accounts confirms it so the order isn't stuck waiting for a payment that will never come.
  */
-accountsRouter.post('/orders/:id/confirm-no-payment', requireRole('ACCOUNTS'), async (req, res) => {
+accountsRouter.post('/orders/:id/confirm-no-payment', requirePermission('payments.verify'), async (req, res) => {
   const id = parse(idParam, req.params.id);
   const { type } = parse(z.object({ type: z.enum(['ADVANCE', 'BALANCE']) }), req.body);
   await withTransaction(async (conn) => {

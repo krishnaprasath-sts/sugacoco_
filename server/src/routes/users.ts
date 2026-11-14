@@ -1,17 +1,16 @@
-/** User management. MD/Admin only. */
+/** User management. Needs the users.manage permission (MD/Admin by default). */
 import { Router } from 'express';
 import { hashPassword } from '../auth/password.js';
 import { z } from 'zod';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { pool, withTransaction } from '../db/pool.js';
 import { audit, diff } from '../services/audit.js';
-import { ROLES } from '../auth/roles.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 
 export const usersRouter = Router();
-usersRouter.use(requireAuth, requireRole('ADMIN'));
+usersRouter.use(requireAuth, requirePermission('users.manage'));
 
 const name = z.string({ error: 'Enter a name' }).trim().min(2, 'Enter a name').max(120);
 const email = z
@@ -19,7 +18,8 @@ const email = z
   .trim()
   .toLowerCase()
   .pipe(z.email('Enter a valid email').max(190));
-const role = z.enum(ROLES, { error: 'Choose a role' });
+// Role code from the roles table; checked against the DB in assertRole.
+const role = z.string({ error: 'Choose a role' }).trim().min(1, 'Choose a role').max(30);
 const password = z
   .string({ error: 'Enter a password' })
   .min(8, 'At least 8 characters')
@@ -35,7 +35,8 @@ const resetSchema = z.object({ password });
 const idSchema = z.coerce.number().int().positive();
 
 const SELECT_LIST = `
-  SELECT u.id, u.name, u.email, r.code AS role, u.can_view_pricing AS canViewPricing,
+  SELECT u.id, u.name, u.email, r.code AS role, r.name AS roleName, u.can_view_pricing AS canViewPricing,
+         EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission = 'pricing.view') AS roleSeesPricing,
          u.is_active AS isActive, u.last_login_at AS lastLoginAt, u.created_at AS createdAt
   FROM users u JOIN roles r ON r.id = u.role_id`;
 
@@ -44,12 +45,25 @@ type ListRow = RowDataPacket & {
   name: string;
   email: string;
   role: string;
+  roleName: string;
   canViewPricing: number;
+  roleSeesPricing: number;
   isActive: number;
   lastLoginAt: string | null;
   createdAt: string;
 };
-const toDto = (r: ListRow) => ({ ...r, canViewPricing: r.canViewPricing === 1, isActive: r.isActive === 1 });
+// canViewPricing = the per-user exception only; roleSeesPricing = the role already allows it.
+const toDto = (r: ListRow) => ({
+  ...r,
+  canViewPricing: r.canViewPricing === 1,
+  roleSeesPricing: Number(r.roleSeesPricing) === 1,
+  isActive: r.isActive === 1,
+});
+
+async function assertRole(code: string) {
+  const [[row]] = await pool.query<RowDataPacket[]>('SELECT id FROM roles WHERE code = ?', [code]);
+  if (!row) throw new HttpError(400, 'Please check the highlighted fields', { fields: { role: 'Choose a role' } });
+}
 
 async function getUser(id: number) {
   const [rows] = await pool.query<ListRow[]>(`${SELECT_LIST} WHERE u.id = ?`, [id]);
@@ -70,6 +84,7 @@ usersRouter.get('/', async (_req, res) => {
 
 usersRouter.post('/', async (req, res) => {
   const body = parse(createSchema, req.body);
+  await assertRole(body.role);
   const hash = await hashPassword(body.password);
   try {
     const id = await withTransaction(async (conn) => {
@@ -101,11 +116,12 @@ usersRouter.patch('/:id', async (req, res) => {
   const id = parse(idSchema, req.params.id);
   const body = parse(updateSchema, req.body);
   const existing = await getUser(id);
+  if (body.role !== undefined) await assertRole(body.role);
 
   // Stop an admin from locking themselves out.
   if (id === req.user!.id) {
     if (body.isActive === false) throw new HttpError(400, 'You cannot deactivate your own account');
-    if (body.role && body.role !== 'ADMIN') throw new HttpError(400, 'You cannot change your own role');
+    if (body.role !== undefined && body.role !== existing.role) throw new HttpError(400, 'You cannot change your own role');
   }
 
   const sets: string[] = [];
@@ -144,5 +160,32 @@ usersRouter.post('/:id/reset-password', async (req, res) => {
     await conn.query('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?', [hash, id]);
     await audit(req, { action: 'USER_PASSWORD_RESET', entityType: 'user', entityId: id }, conn);
   });
+  res.json({ ok: true });
+});
+
+/**
+ * Delete a user who has no history (e.g. added by mistake). Anyone who created or changed
+ * orders, payments, files etc. stays in the database so that history keeps its names: deactivate them instead.
+ * The foreign keys on users decide this, so new tables are covered automatically.
+ */
+usersRouter.delete('/:id', async (req, res) => {
+  const id = parse(idSchema, req.params.id);
+  if (id === req.user!.id) throw new HttpError(400, 'You cannot delete your own account');
+  const user = await getUser(id);
+  try {
+    await withTransaction(async (conn) => {
+      await conn.query('DELETE FROM notifications WHERE user_id = ?', [id]); // their own inbox, not history
+      await conn.query('DELETE FROM users WHERE id = ?', [id]);
+      await audit(req, { action: 'USER_DELETED', entityType: 'user', entityId: id, changes: { name: user.name, email: user.email, role: user.role } }, conn);
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === 'ER_ROW_IS_REFERENCED_2') {
+      throw new HttpError(
+        409,
+        `${user.name} has work recorded in the system (orders, payments, files or history), so they can't be deleted. Deactivate them instead: they can no longer sign in, and their name stays on past records.`,
+      );
+    }
+    throw err;
+  }
   res.json({ ok: true });
 });

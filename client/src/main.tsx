@@ -8,6 +8,9 @@ import { theme } from './theme';
 import App from './App';
 import { ToastProvider } from './components/useToast';
 import { ApiError } from './lib/api';
+import { installSelectGuard } from './lib/selectGuard';
+
+installSelectGuard();
 
 /**
  * Session ended (expired, password reset, user deactivated): clear the cached user so

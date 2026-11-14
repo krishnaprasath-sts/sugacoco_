@@ -2,10 +2,10 @@
 import { Router } from 'express';
 import type { RowDataPacket } from 'mysql2';
 import { pool } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 
 export const summaryRouter = Router();
-summaryRouter.use(requireAuth, requireRole('ACCOUNTS', 'ADMIN'));
+summaryRouter.use(requireAuth, requirePermission('payments.verify', 'orders.close', 'credits.manage', 'overview.view'));
 
 const IST_OFFSET_MS = 5.5 * 3600_000;
 const sql = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');

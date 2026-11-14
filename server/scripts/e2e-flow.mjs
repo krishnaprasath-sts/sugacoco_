@@ -215,5 +215,67 @@ r = await admin('GET', `/reports/audit?orderNo=SC-`);
 check(r.status === 200 && r.data.total > 0, 'audit log');
 r = await sales('GET', '/reports/orders');
 check(r.status === 403, 'sales cannot open reports');
+r = await admin('GET', '/reports/sales');
+check(r.status === 200 && r.data.rows.some((x) => x.salesName === 'Sales User' && x.orders > 0), 'sales-wise report');
+r = await admin('GET', '/reports/sales?scope=closed&format=csv');
+check(r.status === 200 && String(r.data).includes('Sales person'), 'sales-wise report CSV');
+r = await accounts('GET', '/reports/products');
+check(r.status === 200 && r.data.rows.length > 0 && r.data.rows.every((x) => Number(x.quantity) > 0), 'product-wise report');
+r = await admin('GET', '/reports/products?from=2000-01-01&format=xlsx');
+check(r.status === 200, 'product-wise report Excel');
+r = await qc('GET', '/reports/products');
+check(r.status === 403, 'QC cannot open product-wise report');
+
+// ── Roles & permissions
+r = await sales('GET', '/roles');
+check(r.status === 403, 'sales cannot open roles');
+r = await admin('GET', '/roles');
+const adminRole = r.data.roles?.find((x) => x.code === 'ADMIN');
+check(r.status === 200 && r.data.roles.filter((x) => x.isSystem).length === 6, 'admin lists the six built-in roles');
+r = await admin('PATCH', `/roles/${adminRole.id}`, { permissions: adminRole.permissions.filter((p) => p !== 'users.manage' && p !== 'roles.manage') });
+check(r.status === 200 && r.data.role.permissions.includes('users.manage') && r.data.role.permissions.includes('roles.manage'), 'MD/Admin role keeps users and roles access');
+r = await admin('DELETE', `/roles/${adminRole.id}`);
+check(r.status === 400, 'built-in role cannot be deleted');
+
+r = await admin('POST', '/roles', { name: `E2E Verifier ${stamp}`, permissions: ['payments.verify'] });
+const customRole = r.data.role;
+check(r.status === 201 && customRole.permissions.includes('pricing.view'), 'custom role created; needed permission added');
+r = await admin('POST', '/roles', { name: `E2E Verifier ${stamp}`, permissions: [] });
+check(r.status === 409, 'duplicate role name refused');
+r = await admin('POST', '/users', { name: 'E2E Verifier', email: `e2e.verifier.${stamp}@sugacoco.test`, role: customRole.code, password: PASSWORD });
+check(r.status === 201 && r.data.user.roleName === customRole.name, 'user added with custom role');
+const verifierUserId = r.data.user.id;
+const verifier = await login(`e2e.verifier.${stamp}@sugacoco.test`);
+r = await verifier('GET', '/auth/me');
+check(r.data.user.permissions.includes('payments.verify') && r.data.user.canViewPricing, 'custom role permissions on /me');
+r = await verifier('GET', '/payments/queue');
+check(r.status === 200, 'custom role opens verification queue');
+r = await verifier('POST', '/customers', { companyName: `E2E Not Allowed ${stamp}` });
+check(r.status === 403, 'custom role cannot do what it was not given');
+r = await admin('PATCH', `/roles/${customRole.id}`, { permissions: ['qc.work'] });
+check(r.status === 200, 'admin changes custom role');
+r = await verifier('GET', '/payments/queue');
+check(r.status === 403, 'removed permission stops working at once');
+r = await verifier("GET", `/orders/${orderId}`);
+check(r.status === 200 && r.data.order.totalValue === undefined, 'pricing hidden once role loses it');
+r = await admin('DELETE', `/roles/${customRole.id}`);
+check(r.status === 409, 'role with users cannot be deleted');
+await admin('PATCH', `/users/${verifierUserId}`, { role: 'QC', isActive: false });
+r = await admin('DELETE', `/roles/${customRole.id}`);
+check(r.status === 200, 'empty custom role deleted');
+
+// ── Deleting users
+const me = (await admin('GET', '/auth/me')).data.user;
+r = await admin('DELETE', `/users/${me.id}`);
+check(r.status === 400, 'admin cannot delete own account');
+const salesUser = (await admin('GET', '/users')).data.users.find((u) => u.email === 'sales@sugacoco.test');
+r = await admin('DELETE', `/users/${salesUser.id}`);
+check(r.status === 409, 'user with recorded work cannot be deleted');
+r = await sales('DELETE', `/users/${verifierUserId}`);
+check(r.status === 403, 'sales cannot delete users');
+r = await admin('DELETE', `/users/${verifierUserId}`);
+check(r.status === 200, 'user with no history deleted');
+r = await admin('GET', '/users');
+check(!r.data.users.some((u) => u.id === verifierUserId), 'deleted user gone from list');
 
 console.log(`\nAll ${passed} checks passed.`);

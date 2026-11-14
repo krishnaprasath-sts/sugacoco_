@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api } from '../lib/api';
 import type { OrderStatus, PackagingStatus, QcStatus } from '../workflow/statuses';
 import type { DocumentCategory } from '../workflow/documents';
-import type { Role } from '../auth/roles';
+
 import type { QcUpdate } from './qc';
 import type { BillRelease, Container, PackagingUpdate } from './stages';
 
@@ -117,7 +117,8 @@ export type OrderDetail = {
     remarks: string | null;
     changedAt: string;
     changedByName: string;
-    changedByRole: Role;
+    /** Name of the person's role. */
+    changedByRole: string;
   }[];
   qcUpdates: QcUpdate[];
   packagingUpdates: PackagingUpdate[];
@@ -137,6 +138,8 @@ export type OrderDetail = {
     /** Accounts: advance/balance is 0, confirm without a payment record. */
     confirmNoPaymentType: 'ADVANCE' | 'BALANCE' | null;
     canRecordBalance: boolean;
+    /** The current stage waits on someone with this user's permissions. */
+    yourTurn: boolean;
     balanceWaitingForLoading: boolean;
     canApplyCredit: boolean;
     canUpdatePackaging: boolean;
@@ -271,7 +274,7 @@ export function useRemoveDocument(orderId: number) {
 export function useProductSuggestions() {
   return useQuery({
     queryKey: ['products', 'suggestions'],
-    queryFn: async () => (await api<{ products: { name: string; unit: string }[] }>('/products/suggestions')).products,
-    staleTime: 5 * 60 * 1000,
+    queryFn: async () => (await api<{ products: { id: number; name: string; unit: string }[] }>('/products/suggestions')).products,
+    staleTime: 30 * 1000,
   });
 }

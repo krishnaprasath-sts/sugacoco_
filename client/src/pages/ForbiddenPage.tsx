@@ -2,7 +2,7 @@ import { Link as RouterLink } from 'react-router';
 import { Box, Button, Typography } from '@mui/material';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import { useMe } from '../auth/useAuth';
-import { ROLE_HOME } from '../auth/roles';
+import { homePath } from '../nav/navConfig';
 
 export default function ForbiddenPage() {
   const { data: user } = useMe();
@@ -13,9 +13,9 @@ export default function ForbiddenPage() {
         You don't have access to this page
       </Typography>
       <Typography sx={{ color: 'text.secondary', mt: 1, mb: 3 }}>
-        This screen belongs to another department.
+        Your role does not include this screen. Ask MD/Admin if you need it.
       </Typography>
-      <Button component={RouterLink} to={user ? ROLE_HOME[user.role] : '/login'} variant="contained">
+      <Button component={RouterLink} to={homePath(user)} variant="contained">
         Go to my dashboard
       </Button>
     </Box>

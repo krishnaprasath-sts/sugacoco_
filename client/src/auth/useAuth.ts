@@ -10,8 +10,9 @@ export function useMe() {
     queryKey: ME_KEY,
     queryFn: async () => {
       try {
-        const { user } = await api<{ user: User }>('/auth/me');
-        return user;
+        // The server answers { user: null } when nobody is signed in.
+        const { user } = await api<{ user: User | null }>('/auth/me');
+        return user ?? null;
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) return null;
         throw err;

@@ -21,7 +21,7 @@ export function assertEditable(status: OrderStatus) {
 }
 
 /**
- * Move an order to a new status. Checks the role may do it, then writes
+ * Move an order to a new status. Checks the user's role has the permission for it, then writes
  * the order, status history and audit log in the caller's transaction.
  */
 export async function changeStatus(
@@ -33,7 +33,7 @@ export async function changeStatus(
 ) {
   const order = await lockOrder(conn, orderId);
   assertEditable(order.status);
-  if (!canTransition(req.user!.role, order.status, to)) {
+  if (!canTransition(req.user!.permissions, order.status, to)) {
     throw new HttpError(409, 'This action is not allowed at the current stage of the order');
   }
   await conn.query('UPDATE orders SET status = ?, status_changed_at = NOW(), updated_by = ? WHERE id = ?', [

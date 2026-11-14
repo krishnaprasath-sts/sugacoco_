@@ -13,7 +13,7 @@ import {
   Switch,
   TextField,
 } from '@mui/material';
-import { PRICE_RESTRICTED_ROLES, ROLE_LABEL, type Role } from '../../auth/roles';
+import { useRoles } from './rolesApi';
 import { fieldErrors, formError } from '../../lib/formErrors';
 import PasswordField from '../../components/PasswordField';
 import { useCreateUser, useUpdateUser, type ManagedUser } from './usersApi';
@@ -30,11 +30,15 @@ export default function UserFormDialog({ user, isSelf, onClose, onSaved }: Props
   const isEdit = !!user;
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
-  const [role, setRole] = useState<Role | ''>(user?.role ?? '');
+  const [role, setRole] = useState<string>(user?.role ?? '');
   const [password, setPassword] = useState('');
   const [canViewPricing, setCanViewPricing] = useState(user?.canViewPricing ?? false);
 
-  const isRestricted = !!role && PRICE_RESTRICTED_ROLES.includes(role);
+  const { data: roleData, isPending: rolesLoading } = useRoles();
+  const roles = roleData?.roles ?? [];
+  const chosen = roles.find((r) => r.code === role);
+  // The per-user pricing switch only matters when the role itself hides pricing.
+  const isRestricted = !!chosen && !chosen.permissions.includes('pricing.view');
   const create = useCreateUser();
   const update = useUpdateUser();
   const mutation = isEdit ? update : create;
@@ -43,7 +47,7 @@ export default function UserFormDialog({ user, isSelf, onClose, onSaved }: Props
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const body = { name, email, role: role as Role, canViewPricing: isRestricted && canViewPricing };
+    const body = { name, email, role, canViewPricing: isRestricted && canViewPricing };
     if (isEdit) {
       update.mutate({ id: user.id, ...body }, { onSuccess: () => onSaved(`${name} updated`) });
     } else {
@@ -85,19 +89,21 @@ export default function UserFormDialog({ user, isSelf, onClose, onSaved }: Props
             label="Role"
             required
             value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
+            onChange={(e) => setRole(e.target.value)}
             disabled={isSelf}
             error={!!errors.role}
             helperText={errors.role ?? (isSelf ? 'You cannot change your own role' : undefined)}
             slotProps={{
               select: {
-                renderValue: (v) => (v ? ROLE_LABEL[v as Role] : <Box component="span" sx={{ color: 'text.disabled' }}>Choose a role</Box>),
+                renderValue: (v) =>
+                  v ? (chosen?.name ?? user?.roleName ?? String(v)) : <Box component="span" sx={{ color: 'text.disabled' }}>{rolesLoading ? 'Loading roles…' : 'Choose a role'}</Box>,
               },
             }}
           >
-            {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
-              <MenuItem key={r} value={r}>
-                {ROLE_LABEL[r]}
+            {roles.map((r) => (
+              <MenuItem key={r.code} value={r.code} sx={{ display: 'block', whiteSpace: 'normal' }}>
+                <Box sx={{ fontWeight: 500 }}>{r.name}</Box>
+                {r.description && <Box sx={{ fontSize: 12, color: 'text.secondary' }}>{r.description}</Box>}
               </MenuItem>
             ))}
           </TextField>
@@ -115,7 +121,7 @@ export default function UserFormDialog({ user, isSelf, onClose, onSaved }: Props
           {isRestricted && (
             <FormControlLabel
               control={<Switch checked={canViewPricing} onChange={(e) => setCanViewPricing(e.target.checked)} />}
-              label={`Allow this ${ROLE_LABEL[role as Role]} user to see pricing and payments`}
+              label={`Allow this user to see pricing and payments (the ${chosen?.name} role does not include it)`}
             />
           )}
         </Stack>

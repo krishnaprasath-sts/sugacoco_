@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import type { PoolConnection } from 'mysql2/promise';
 import { pool, withTransaction } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit, diff } from '../services/audit.js';
@@ -106,6 +106,31 @@ function calculate(input: OrderInput, creditApplied = 0) {
   return { items, total, advance: round2(advance), balance: round2(balance) };
 }
 
+/**
+ * Each product must come from the MD/Admin product list. Links the line to the product and uses the list's
+ * spelling. `keep` = names already on the order being edited, so an old or hidden product can stay.
+ */
+async function resolveProducts(input: OrderInput, keep: string[] = []) {
+  const [rows] = await pool.query<RowDataPacket[]>('SELECT id, name, is_active FROM products');
+  const norm = (n: string) => n.replace(/\s+/g, ' ').trim().toLowerCase();
+  const byName = new Map(rows.map((r) => [norm(String(r.name)), r]));
+  const kept = new Set(keep.map(norm));
+  const fields: Record<string, string> = {};
+  input.items.forEach((item, idx) => {
+    const key = norm(item.productName);
+    const p = byName.get(key);
+    if (p && (p.is_active === 1 || kept.has(key))) {
+      item.productId = p.id;
+      item.productName = p.name;
+    } else if (kept.has(key)) {
+      item.productId = null;
+    } else {
+      fields[`items.${idx}.productName`] = p ? 'This product is no longer sold. Choose another one.' : 'Choose a product from the list';
+    }
+  });
+  if (Object.keys(fields).length) throw new HttpError(400, 'Please check the highlighted fields', { fields });
+}
+
 async function assertCustomer(customerId: number) {
   const [[c]] = await pool.query<RowDataPacket[]>('SELECT id FROM customers WHERE id = ? AND is_active = 1', [customerId]);
   if (!c) throw new HttpError(400, 'Please check the highlighted fields', { fields: { customerId: 'Customer not found' } });
@@ -180,10 +205,11 @@ ordersRouter.get('/:id', async (req, res) => {
   res.json(await getOrderDetail(parse(idParam, req.params.id), req.user!));
 });
 
-ordersRouter.post('/', requireRole('SALES'), async (req, res) => {
+ordersRouter.post('/', requirePermission('orders.create'), async (req, res) => {
   const input = parse(orderSchema, req.body);
   const advancePayment = req.body?.advancePayment ? parse(advancePaymentSchema, req.body.advancePayment) : null;
   await assertCustomer(input.customerId);
+  await resolveProducts(input);
   const calc = calculate(input);
 
   try {
@@ -225,11 +251,13 @@ ordersRouter.post('/', requireRole('SALES'), async (req, res) => {
   }
 });
 
-ordersRouter.patch('/:id', requireRole('SALES'), async (req, res) => {
+ordersRouter.patch('/:id', requirePermission('orders.create'), async (req, res) => {
   const id = parse(idParam, req.params.id);
   const input = parse(orderSchema, req.body);
   await assertCustomer(input.customerId);
   const before = await getOrderRow(id);
+  const [oldItems] = await pool.query<RowDataPacket[]>('SELECT product_name FROM order_items WHERE order_id = ?', [id]);
+  await resolveProducts(input, oldItems.map((r) => String(r.product_name)));
 
   try {
     await withTransaction(async (conn) => {
@@ -285,7 +313,7 @@ const PAYMENT_STAGE: Record<'ADVANCE' | 'BALANCE', { allowed: OrderStatus[]; rej
   BALANCE: { allowed: ['DOCUMENTATION_IN_PROGRESS', 'BALANCE_REJECTED'], rejected: 'BALANCE_REJECTED', waiting: 'AWAITING_BALANCE_VERIFICATION' },
 };
 
-ordersRouter.post('/:id/payments', requireRole('SALES'), async (req, res) => {
+ordersRouter.post('/:id/payments', requirePermission('payments.record'), async (req, res) => {
   const id = parse(idParam, req.params.id);
   const type = parse(z.enum(['ADVANCE', 'BALANCE']).default('ADVANCE'), req.body?.paymentType);
   const body = parse(advancePaymentSchema, req.body);
@@ -336,7 +364,7 @@ ordersRouter.post('/:id/payments', requireRole('SALES'), async (req, res) => {
 });
 
 /** Sales asks to use the customer's verified credit on this order. Accounts must verify it. */
-ordersRouter.post('/:id/credit-applications', requireRole('SALES'), async (req, res) => {
+ordersRouter.post('/:id/credit-applications', requirePermission('payments.record'), async (req, res) => {
   const id = parse(idParam, req.params.id);
   const body = parse(
     z.object({ amount: positive('Enter the amount to use'), remarks: optionalText(2000) }),
@@ -363,7 +391,7 @@ ordersRouter.post('/:id/credit-applications', requireRole('SALES'), async (req, 
 });
 
 /** MD/Admin cancels an order/PI. The order becomes read-only for everyone. */
-ordersRouter.post('/:id/cancel', requireRole('ADMIN'), async (req, res) => {
+ordersRouter.post('/:id/cancel', requirePermission('orders.cancel'), async (req, res) => {
   const id = parse(idParam, req.params.id);
   const { reason } = parse(z.object({ reason: z.string({ error: 'Give the reason' }).trim().min(3, 'Give the reason').max(2000) }), req.body);
   await withTransaction(async (conn) => {

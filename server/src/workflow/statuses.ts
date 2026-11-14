@@ -6,7 +6,8 @@
  *  - A rejected balance payment holds the order in BALANCE_REJECTED until Sales re-submits.
  * Must match the CHECK constraint on orders.status (migrations 003 + 004).
  */
-import type { Role } from '../auth/roles.js';
+import type { Department } from '../auth/roles.js';
+import type { Permission } from '../auth/permissions.js';
 
 export const ORDER_STATUSES = [
   'AWAITING_ADVANCE_VERIFICATION',
@@ -58,7 +59,7 @@ export const PACKAGING_STATUSES = ['AWAITING', 'IN_PROGRESS', 'ON_HOLD', 'ISSUE'
 export type PackagingStatus = (typeof PACKAGING_STATUSES)[number];
 
 /** Department that must act next, for queues and "pending actions". */
-export const STATUS_OWNER: Record<OrderStatus, Role | null> = {
+export const STATUS_OWNER: Record<OrderStatus, Department | null> = {
   AWAITING_ADVANCE_VERIFICATION: 'ACCOUNTS',
   ADVANCE_REJECTED: 'SALES',
   AWAITING_QC: 'QC',
@@ -79,54 +80,77 @@ export const STATUS_OWNER: Record<OrderStatus, Role | null> = {
   CANCELLED: null,
 };
 
-type Transition = { from: OrderStatus[]; to: OrderStatus; role: Role; action: string };
+/** `perm` = the permission a user's role needs to make this move. */
+type Transition = { from: OrderStatus[]; to: OrderStatus; perm: Permission; action: string };
 
 const QC_WORKING: OrderStatus[] = ['AWAITING_QC', 'QC_IN_PROGRESS', 'WAITING_FOR_MATERIALS', 'AWAITING_QUALITY_CHECK'];
 const PACKAGING_WORKING: OrderStatus[] = ['AWAITING_PACKAGING', 'PACKAGING_IN_PROGRESS', 'PACKAGING_ON_HOLD', 'PACKAGING_ISSUE'];
 
 export const TRANSITIONS: Transition[] = [
   // Stage 2: advance payment
-  { from: ['AWAITING_ADVANCE_VERIFICATION'], to: 'AWAITING_QC', role: 'ACCOUNTS', action: 'Approve advance payment' },
-  { from: ['AWAITING_ADVANCE_VERIFICATION'], to: 'ADVANCE_REJECTED', role: 'ACCOUNTS', action: 'Reject advance payment' },
-  { from: ['ADVANCE_REJECTED'], to: 'AWAITING_ADVANCE_VERIFICATION', role: 'SALES', action: 'Re-submit advance payment' },
+  { from: ['AWAITING_ADVANCE_VERIFICATION'], to: 'AWAITING_QC', perm: 'payments.verify', action: 'Approve advance payment' },
+  { from: ['AWAITING_ADVANCE_VERIFICATION'], to: 'ADVANCE_REJECTED', perm: 'payments.verify', action: 'Reject advance payment' },
+  { from: ['ADVANCE_REJECTED'], to: 'AWAITING_ADVANCE_VERIFICATION', perm: 'payments.record', action: 'Re-submit advance payment' },
 
   // Stage 3: QC / production (QC moves freely between working states until Ready)
-  { from: QC_WORKING, to: 'QC_IN_PROGRESS', role: 'QC', action: 'Production in progress' },
-  { from: QC_WORKING, to: 'WAITING_FOR_MATERIALS', role: 'QC', action: 'Waiting for materials' },
-  { from: QC_WORKING, to: 'AWAITING_QUALITY_CHECK', role: 'QC', action: 'Awaiting quality check' },
-  { from: QC_WORKING, to: 'AWAITING_PACKAGING', role: 'QC', action: 'Mark ready for packaging' },
+  { from: QC_WORKING, to: 'QC_IN_PROGRESS', perm: 'qc.work', action: 'Production in progress' },
+  { from: QC_WORKING, to: 'WAITING_FOR_MATERIALS', perm: 'qc.work', action: 'Waiting for materials' },
+  { from: QC_WORKING, to: 'AWAITING_QUALITY_CHECK', perm: 'qc.work', action: 'Awaiting quality check' },
+  { from: QC_WORKING, to: 'AWAITING_PACKAGING', perm: 'qc.work', action: 'Mark ready for packaging' },
 
   // Stage 3b: packaging (required for every order)
-  { from: PACKAGING_WORKING, to: 'PACKAGING_IN_PROGRESS', role: 'PACKAGING', action: 'Packaging in progress' },
-  { from: PACKAGING_WORKING, to: 'PACKAGING_ON_HOLD', role: 'PACKAGING', action: 'Put packaging on hold' },
-  { from: PACKAGING_WORKING, to: 'PACKAGING_ISSUE', role: 'PACKAGING', action: 'Report packaging issue / rework' },
-  { from: ['PACKAGING_IN_PROGRESS'], to: 'READY_FOR_DOCUMENTATION', role: 'PACKAGING', action: 'Mark packaging completed' },
+  { from: PACKAGING_WORKING, to: 'PACKAGING_IN_PROGRESS', perm: 'packaging.work', action: 'Packaging in progress' },
+  { from: PACKAGING_WORKING, to: 'PACKAGING_ON_HOLD', perm: 'packaging.work', action: 'Put packaging on hold' },
+  { from: PACKAGING_WORKING, to: 'PACKAGING_ISSUE', perm: 'packaging.work', action: 'Report packaging issue / rework' },
+  { from: ['PACKAGING_IN_PROGRESS'], to: 'READY_FOR_DOCUMENTATION', perm: 'packaging.work', action: 'Mark packaging completed' },
 
   // Stage 4: container booking and loading
-  { from: ['READY_FOR_DOCUMENTATION'], to: 'DOCUMENTATION_IN_PROGRESS', role: 'DOCUMENTATION', action: 'Start documentation' },
+  { from: ['READY_FOR_DOCUMENTATION'], to: 'DOCUMENTATION_IN_PROGRESS', perm: 'documentation.work', action: 'Start documentation' },
 
   // Stage 5: balance payment (after loading, before gate-in)
-  { from: ['DOCUMENTATION_IN_PROGRESS'], to: 'AWAITING_BALANCE_VERIFICATION', role: 'SALES', action: 'Record balance payment' },
-  { from: ['AWAITING_BALANCE_VERIFICATION'], to: 'AWAITING_DOCUMENT_RELEASE', role: 'ACCOUNTS', action: 'Approve balance payment' },
-  { from: ['DOCUMENTATION_IN_PROGRESS'], to: 'AWAITING_DOCUMENT_RELEASE', role: 'ACCOUNTS', action: 'Confirm no balance due' },
-  { from: ['AWAITING_BALANCE_VERIFICATION'], to: 'BALANCE_REJECTED', role: 'ACCOUNTS', action: 'Reject balance payment' },
-  { from: ['BALANCE_REJECTED'], to: 'AWAITING_BALANCE_VERIFICATION', role: 'SALES', action: 'Re-submit balance payment' },
+  { from: ['DOCUMENTATION_IN_PROGRESS'], to: 'AWAITING_BALANCE_VERIFICATION', perm: 'payments.record', action: 'Record balance payment' },
+  { from: ['AWAITING_BALANCE_VERIFICATION'], to: 'AWAITING_DOCUMENT_RELEASE', perm: 'payments.verify', action: 'Approve balance payment' },
+  { from: ['DOCUMENTATION_IN_PROGRESS'], to: 'AWAITING_DOCUMENT_RELEASE', perm: 'payments.verify', action: 'Confirm no balance due' },
+  { from: ['AWAITING_BALANCE_VERIFICATION'], to: 'BALANCE_REJECTED', perm: 'payments.verify', action: 'Reject balance payment' },
+  { from: ['BALANCE_REJECTED'], to: 'AWAITING_BALANCE_VERIFICATION', perm: 'payments.record', action: 'Re-submit balance payment' },
 
   // Stage 6: gate-in and bill release
-  { from: ['AWAITING_DOCUMENT_RELEASE'], to: 'AWAITING_FINAL_VERIFICATION', role: 'DOCUMENTATION', action: 'Complete documentation' },
+  { from: ['AWAITING_DOCUMENT_RELEASE'], to: 'AWAITING_FINAL_VERIFICATION', perm: 'documentation.work', action: 'Complete documentation' },
 
   // Stage 7: closure
-  { from: ['AWAITING_FINAL_VERIFICATION'], to: 'CLOSED', role: 'ACCOUNTS', action: 'Close order' },
+  { from: ['AWAITING_FINAL_VERIFICATION'], to: 'CLOSED', perm: 'orders.close', action: 'Close order' },
 ];
 
 /** Statuses from which MD/Admin may cancel. */
 export const CANCELLABLE = ORDER_STATUSES.filter((s) => s !== 'CLOSED' && s !== 'CANCELLED');
 
-/** True if `role` may move an order from `from` to `to`. */
-export function canTransition(role: Role, from: OrderStatus, to: OrderStatus): boolean {
-  if (to === 'CANCELLED') return role === 'ADMIN' && (CANCELLABLE as readonly string[]).includes(from);
-  return TRANSITIONS.some((t) => t.role === role && t.to === to && t.from.includes(from) && from !== to);
+/** True if a user with these permissions may move an order from `from` to `to`. */
+export function canTransition(permissions: readonly Permission[], from: OrderStatus, to: OrderStatus): boolean {
+  if (to === 'CANCELLED') return permissions.includes('orders.cancel') && (CANCELLABLE as readonly string[]).includes(from);
+  return TRANSITIONS.some((t) => permissions.includes(t.perm) && t.to === to && t.from.includes(from) && from !== to);
 }
+
+/** Permission of the people who must act next at each status (notifications, "waiting for your action"). */
+export const STATUS_PERMISSION: Record<OrderStatus, Permission | null> = {
+  AWAITING_ADVANCE_VERIFICATION: 'payments.verify',
+  ADVANCE_REJECTED: 'payments.record',
+  AWAITING_QC: 'qc.work',
+  QC_IN_PROGRESS: 'qc.work',
+  WAITING_FOR_MATERIALS: 'qc.work',
+  AWAITING_QUALITY_CHECK: 'qc.work',
+  AWAITING_PACKAGING: 'packaging.work',
+  PACKAGING_IN_PROGRESS: 'packaging.work',
+  PACKAGING_ON_HOLD: 'packaging.work',
+  PACKAGING_ISSUE: 'packaging.work',
+  READY_FOR_DOCUMENTATION: 'documentation.work',
+  DOCUMENTATION_IN_PROGRESS: 'documentation.work',
+  AWAITING_BALANCE_VERIFICATION: 'payments.verify',
+  BALANCE_REJECTED: 'payments.record',
+  AWAITING_DOCUMENT_RELEASE: 'documentation.work',
+  AWAITING_FINAL_VERIFICATION: 'orders.close',
+  CLOSED: null,
+  CANCELLED: null,
+};
 
 /** Closed and cancelled orders are read-only for everyone. */
 export function isLocked(status: OrderStatus): boolean {

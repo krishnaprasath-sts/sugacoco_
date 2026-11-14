@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useUrlPage, useUrlState } from '../../lib/useUrlState';
 import { Link as RouterLink } from 'react-router';
 import {
   Box,
@@ -27,8 +27,8 @@ import ErrorState from '../../components/ErrorState';
 
 /** Orders Packaging finished: when they went to Documentation and what stage they are at now. */
 export default function PackagingSentPage() {
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useUrlState('q');
+  const [page, setPage] = useUrlPage();
   const [pageSize] = usePageSize();
   const q = useDebounced(search.trim());
   const { data, isPending, error, refetch } = usePackagingSent(page, pageSize, q);
@@ -46,8 +46,7 @@ export default function PackagingSentPage() {
         placeholder="Search order no, PI no or customer"
         value={search}
         onChange={(e) => {
-          setSearch(e.target.value);
-          setPage(1);
+          setSearch(e.target.value, { resetPage: true });
         }}
         sx={{ mb: 2, maxWidth: { md: 420 } }}
         slotProps={{
@@ -56,6 +55,7 @@ export default function PackagingSentPage() {
         }}
       />
       {error && <ErrorState error={error} onRetry={() => refetch()} />}
+      <ListPagination page={page} pageSize={pageSize} total={data?.total ?? 0} onChange={setPage} noun="orders" placement="top" />
       {!error && (
         <Card>
           <ResponsiveTable

@@ -2,8 +2,8 @@ import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { Box, CircularProgress } from '@mui/material';
 import { useMe } from './auth/useAuth';
-import { ROLE_HOME, type Role } from './auth/roles';
-import { NAV } from './nav/navConfig';
+import type { Permission } from './auth/roles';
+import { homePath, NAV_ITEMS, NO_ACCESS_PATH } from './nav/navConfig';
 import RequireAuth from './components/RequireAuth';
 import AppLayout from './layouts/AppLayout';
 // Pages load on demand: each role downloads only its own screens, and the public tracking page stays small.
@@ -14,10 +14,15 @@ const TrackingPage = lazy(() => import('./pages/TrackingPage'));
 const PlaceholderPage = lazy(() => import('./pages/PlaceholderPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const UsersPage = lazy(() => import('./pages/admin/UsersPage'));
+const RolesPage = lazy(() => import('./pages/admin/RolesPage'));
+const NoAccessPage = lazy(() => import('./pages/NoAccessPage'));
+const ProductsPage = lazy(() => import('./pages/admin/ProductsPage'));
 const VerificationQueuePage = lazy(() => import('./pages/accounts/VerificationQueuePage'));
 const FinalVerificationPage = lazy(() => import('./pages/accounts/FinalVerificationPage'));
 const CreditsPage = lazy(() => import('./pages/accounts/CreditsPage'));
 const QcQueuePage = lazy(() => import('./pages/qc/QcQueuePage'));
+const QcSentPage = named(() => import('./pages/qc/QcQueuePage'), 'QcSentPage');
+const QcQueueListPage = named(() => import('./pages/qc/QcQueuePage'), 'QcQueueListPage');
 const PackagingQueuePage = lazy(() => import('./pages/packaging/PackagingQueuePage'));
 const PackagingSentPage = lazy(() => import('./pages/packaging/PackagingSentPage'));
 const DocumentationQueuePage = lazy(() => import('./pages/documentation/DocumentationQueuePage'));
@@ -34,6 +39,8 @@ const CancellationsPage = named(() => import('./pages/admin/AdminPages'), 'Cance
 const PendingActionsPage = named(() => import('./pages/admin/AdminPages'), 'PendingActionsPage');
 const AuditLogPage = named(() => import('./pages/reports/ReportsPages'), 'AuditLogPage');
 const ReportsPage = named(() => import('./pages/reports/ReportsPages'), 'ReportsPage');
+const SalesWiseReportPage = named(() => import('./pages/reports/GroupedReports'), 'SalesWiseReportPage');
+const ProductWiseReportPage = named(() => import('./pages/reports/GroupedReports'), 'ProductWiseReportPage');
 
 
 // Built screens. Any nav path not listed here shows the placeholder.
@@ -47,8 +54,9 @@ const PAGES: Record<string, ReactNode> = {
   '/accounts/final': <FinalVerificationPage />,
   '/accounts/credits': <CreditsPage />,
   '/accounts/closed': <OrdersListPage overline="Accounts" title="Closed Orders" subtitle="Completed orders and their financial history." statuses={['CLOSED']} />,
-  '/accounts/reports': <ReportsPage />,
   '/qc': <QcQueuePage />,
+  '/qc/queue': <QcQueueListPage />,
+  '/qc/sent': <QcSentPage />,
   '/packaging': <PackagingQueuePage />,
   '/packaging/sent': <PackagingSentPage />,
   '/documentation': <DocumentationQueuePage />,
@@ -58,17 +66,25 @@ const PAGES: Record<string, ReactNode> = {
   '/admin/pending': <PendingActionsPage />,
   '/admin/customers': <CustomersPage basePath="/admin/customers" readOnly />,
   '/admin/cancellations': <CancellationsPage />,
-  '/admin/reports': <ReportsPage />,
+  '/reports': <ReportsPage />,
+  '/reports/sales': <SalesWiseReportPage />,
+  '/reports/products': <ProductWiseReportPage />,
   '/admin/audit': <AuditLogPage />,
+  '/admin/products': <ProductsPage />,
   '/admin/users': <UsersPage />,
+  '/admin/roles': <RolesPage />,
 };
 
-/** Pages that aren't menu items (detail and edit screens). */
-const EXTRA_ROUTES: { path: string; roles?: Role[]; element: ReactNode }[] = [
-  { path: '/orders/:id', element: <OrderDetailPage /> }, // every role; API hides what they can't see
-  { path: '/sales/orders/:id/edit', roles: ['SALES'], element: <OrderFormPage /> },
-  { path: '/sales/customers/:id', roles: ['SALES'], element: <CustomerDetailPage /> },
-  { path: '/admin/customers/:id', roles: ['ADMIN'], element: <CustomerDetailPage basePath="/admin/customers" readOnly /> },
+/** Pages that aren't menu items (detail and edit screens). Without `perms`, any signed-in user may open them. */
+const EXTRA_ROUTES: { path: string; perms?: Permission[]; element: ReactNode }[] = [
+  { path: '/orders/:id', element: <OrderDetailPage /> }, // everyone; the API hides what they can't see
+  { path: '/sales/orders/:id/edit', perms: ['orders.create'], element: <OrderFormPage /> },
+  { path: '/sales/customers/:id', perms: ['customers.manage'], element: <CustomerDetailPage /> },
+  { path: '/admin/customers/:id', perms: ['customers.view', 'customers.manage'], element: <CustomerDetailPage basePath="/admin/customers" readOnly /> },
+  { path: NO_ACCESS_PATH, element: <NoAccessPage /> },
+  // Old report links from before Reports had one shared page.
+  { path: '/accounts/reports', element: <Navigate to="/reports" replace /> },
+  { path: '/admin/reports', element: <Navigate to="/reports" replace /> },
 ];
 
 function HomeRedirect() {
@@ -80,7 +96,7 @@ function HomeRedirect() {
       </Box>
     );
   }
-  return <Navigate to={user ? ROLE_HOME[user.role] : '/login'} replace />;
+  return <Navigate to={homePath(user)} replace />;
 }
 
 export default function App() {
@@ -93,17 +109,15 @@ export default function App() {
 
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
-          {(Object.keys(NAV) as Role[]).map((role) => (
-            // Each department's pages are only reachable by that role (the API checks again).
-            <Route key={role} element={<RequireAuth roles={[role]} />}>
-              {NAV[role].map((item) => (
-                <Route key={item.path} path={item.path} element={PAGES[item.path] ?? <PlaceholderPage item={item} />} />
-              ))}
+          {NAV_ITEMS.map((item) => (
+            // A page opens only if the role has the item's permission (the API checks again).
+            <Route key={item.path} element={<RequireAuth perms={[item.perm]} />}>
+              <Route path={item.path} element={PAGES[item.path] ?? <PlaceholderPage item={item} />} />
             </Route>
           ))}
           {EXTRA_ROUTES.map((r) =>
-            r.roles ? (
-              <Route key={r.path} element={<RequireAuth roles={r.roles} />}>
+            r.perms ? (
+              <Route key={r.path} element={<RequireAuth perms={r.perms} />}>
                 <Route path={r.path} element={r.element} />
               </Route>
             ) : (

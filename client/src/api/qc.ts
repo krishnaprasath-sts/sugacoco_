@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import type { OrderStatus, QcStatus } from '../workflow/statuses';
 
@@ -62,6 +62,18 @@ export function useQcQueue() {
     queryKey: ['qc', 'queue'],
     queryFn: () => api<{ active: QcQueueRow[]; sentToPackaging: QcQueueRow[] }>('/qc/queue'),
     refetchInterval: 60_000,
+  });
+}
+
+/** Every order QC sent to Packaging, searched and paged on the server. */
+export function useQcSent(page: number, pageSize: number, q: string) {
+  return useQuery({
+    queryKey: ['qc', 'sent', page, pageSize, q],
+    queryFn: () =>
+      api<{ orders: QcQueueRow[]; total: number }>(
+        `/qc/sent?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), ...(q ? { q } : {}) })}`,
+      ),
+    placeholderData: keepPreviousData,
   });
 }
 

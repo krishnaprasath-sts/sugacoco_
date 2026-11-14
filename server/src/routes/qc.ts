@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { pool, withTransaction } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit } from '../services/audit.js';
@@ -12,7 +12,7 @@ import type { OrderStatus } from '../workflow/statuses.js';
 import { optionalDate } from '../lib/validation.js';
 
 export const qcRouter = Router();
-qcRouter.use(requireAuth, requireRole('QC'));
+qcRouter.use(requireAuth, requirePermission('qc.work'));
 
 export const QC_WORKING: OrderStatus[] = ['AWAITING_QC', 'QC_IN_PROGRESS', 'WAITING_FOR_MATERIALS', 'AWAITING_QUALITY_CHECK'];
 
@@ -113,4 +113,39 @@ qcRouter.get('/queue', async (_req, res) => {
   );
   const clean = (rows: RowDataPacket[]) => rows.map((r) => ({ ...r, mediaCount: Number(r.mediaCount) }));
   res.json({ active: clean(active), sentToPackaging: clean(sent) });
+});
+
+/** Every order QC handed to Packaging, newest first, with search (order no, PI no, customer, product). */
+const sentQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(10),
+  q: z.string().trim().max(100).optional(),
+});
+qcRouter.get('/sent', async (req, res) => {
+  const { page, pageSize, q } = parse(sentQuery, req.query);
+  const marks = QC_WORKING.map(() => '?').join(',');
+  const where = q
+    ? `WHERE (o.order_no LIKE ? OR o.pi_number LIKE ? OR c.company_name LIKE ?
+              OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_name LIKE ?))`
+    : '';
+  const like = q ? Array(4).fill(`%${q.replace(/[\\%_]/g, '\\$&')}%`) : [];
+  const from = `FROM orders o JOIN customers c ON c.id = o.customer_id
+    JOIN (SELECT order_id, MAX(changed_at) AS sentAt FROM order_status_history
+          WHERE from_status IN (${marks}) AND to_status = 'AWAITING_PACKAGING' GROUP BY order_id) s ON s.order_id = o.id
+    ${where}`;
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.status, o.status_changed_at AS statusChangedAt,
+            o.qc_status AS qcStatus, o.expected_ready_date AS expectedReadyDate, c.company_name AS customerName, s.sentAt,
+            (SELECT GROUP_CONCAT(CONCAT(i.product_name, ' (', TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM i.quantity)), ' ', i.unit, ')')
+                                 ORDER BY i.sort_order SEPARATOR ', ') FROM order_items i WHERE i.order_id = o.id) AS products,
+            (SELECT q.sourcing_status FROM qc_updates q WHERE q.order_id = o.id ORDER BY q.id DESC LIMIT 1) AS sourcingStatus,
+            (SELECT q.quality_check_status FROM qc_updates q WHERE q.order_id = o.id ORDER BY q.id DESC LIMIT 1) AS qualityCheckStatus,
+            (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id AND d.deleted_at IS NULL
+               AND d.category IN ('QC_MEDIA','CONTAINER_IMAGE','LOADING_IMAGE')) AS mediaCount
+     ${from}
+     ORDER BY s.sentAt DESC, o.id DESC LIMIT ? OFFSET ?`,
+    [...QC_WORKING, ...like, pageSize, (page - 1) * pageSize],
+  );
+  const [[{ total }]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total ${from}`, [...QC_WORKING, ...like]);
+  res.json({ orders: rows.map((r) => ({ ...r, mediaCount: Number(r.mediaCount) })), total: Number(total), page, pageSize });
 });

@@ -6,6 +6,8 @@ export default defineConfig({
   server: {
     port: 5180,
     strictPort: true,
+    // Also listen on the network address so other office PCs and phones can open the dev app.
+    host: true,
     // Dev: /api calls go to the Express server.
     proxy: { '/api': 'http://localhost:5050' },
   },

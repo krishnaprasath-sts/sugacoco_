@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useUrlState } from '../../lib/useUrlState';
+import { useMemo } from 'react';
 import { Link as RouterLink } from 'react-router';
 import { Box, Button, Card, Chip, Grid, InputAdornment, Skeleton, Stack, TextField, Typography } from '@mui/material';
 import HourglassEmptyOutlined from '@mui/icons-material/HourglassEmptyOutlined';
@@ -34,8 +35,10 @@ const daysSince = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date
 export default function PackagingQueuePage() {
   const { data: me } = useMe();
   const { data, isPending, error, refetch } = usePackagingQueue();
-  const [filter, setFilter] = useState<FilterKey>('ALL');
-  const [search, setSearch] = useState('');
+  // Kept in the URL so Back from an order returns to the same filter, search and page.
+  const [filterRaw, setFilter] = useUrlState('filter', 'ALL');
+  const filter = filterRaw as FilterKey;
+  const [search, setSearch] = useUrlState('q');
   const all = useMemo(() => data?.active ?? [], [data]);
   const n = (s: string) => all.filter((r) => r.status === s).length;
 
@@ -98,6 +101,7 @@ export default function PackagingQueuePage() {
         />
       </Stack>
 
+      <ListPagination page={paged.page} pageSize={paged.pageSize} total={paged.total} onChange={paged.setPage} noun="orders" placement="top" />
       <Stack spacing={1.5} sx={{ mb: 4 }}>
         {isPending && Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} variant="rounded" height={110} />)}
         {!error && !isPending && !shown.length && (

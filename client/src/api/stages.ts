@@ -1,8 +1,9 @@
 /** API hooks for Packaging, Documentation, balance/closure, credits, tracking links, admin and reports. */
+import type { Department } from '../auth/roles';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import type { OrderStatus, PackagingStatus } from '../workflow/statuses';
-import type { Role } from '../auth/roles';
+
 
 /** Invalidate everything an order change can affect. */
 export function useRefresh(orderId?: number) {
@@ -268,7 +269,7 @@ export function useTrackingAction(orderId: number) {
 // ───────────── Admin ─────────────
 export type AdminSummary = {
   counts: Partial<Record<OrderStatus, number>>;
-  pendingByDept: Partial<Record<Role, number>>;
+  pendingByDept: Partial<Record<Department, number>>;
   money: { currency: string; orders: number; totalValue: string; received: string; outstanding: string }[];
   pendingVerification: { currency: string; type: 'ADVANCE' | 'BALANCE'; n: number; amount: string }[];
 };
@@ -281,7 +282,7 @@ export type PendingRow = {
   statusChangedAt: string;
   customerName: string;
   hoursWaiting: number;
-  owner: Role | null;
+  owner: Department | null;
 };
 export const usePendingActions = () =>
   useQuery({ queryKey: ['admin', 'pending'], queryFn: () => api<{ orders: PendingRow[] }>('/admin/pending') });
@@ -353,7 +354,8 @@ export type AuditEntry = {
   ipAddress: string | null;
   createdAt: string;
   userName: string | null;
-  userRole: Role | null;
+  /** Name of the person's role. */
+  userRole: string | null;
   orderId: number | null;
   orderNo: string | null;
 };

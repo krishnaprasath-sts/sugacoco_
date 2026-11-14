@@ -14,7 +14,8 @@ Never edit an applied migration; add a new numbered file instead.
 
 | Table | Purpose | Written by |
 |---|---|---|
-| `roles`, `users` | Logins and departments | MD/Admin (Users screen) |
+| `roles`, `users` | Logins and roles. Built-in roles have `is_system = 1`; custom roles get code `CUSTOM_<id>` | MD/Admin (Users, Roles & Permissions screens) |
+| `role_permissions` | Which permissions each role has (one row per role + permission key from `server/src/auth/permissions.ts`) | MD/Admin (Roles & Permissions screen) |
 | `customers` | Reusable customer records | Sales |
 | `products` | Optional product master for quick picking | Admin / Sales |
 | `orders` | One row per PI/order: amounts, overall `status`, QC snapshot, closure | Sales creates; workflow updates |
@@ -51,8 +52,8 @@ customers 1──* customer_credits (source_order / applied_order → orders)
 ```
 
 ## Rules enforced in the API (not in SQL)
-- Only the department that owns the current status may act (`canTransition` in `workflow/statuses.ts`).
-- QC and Packaging never receive pricing, payment or voucher data unless `users.can_view_pricing = 1`.
+- Only a user whose role has the permission for the current stage may move the order (`canTransition` in `workflow/statuses.ts`).
+- Users whose role lacks `pricing.view` never receive pricing, payment or voucher data unless `users.can_view_pricing = 1`.
 - Every order goes QC → Packaging → Documentation; QC cannot send an order straight to Documentation.
 - The public tracking API returns only customer-safe fields for the one order its token belongs to; tokens never appear in logs.
 - Gate-in date can be set only after the balance payment is approved.

@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { pool, withTransaction } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit } from '../services/audit.js';
@@ -13,7 +13,7 @@ import type { OrderStatus } from '../workflow/statuses.js';
 import { optionalDate } from '../lib/validation.js';
 
 export const packagingRouter = Router();
-packagingRouter.use(requireAuth, requireRole('PACKAGING'));
+packagingRouter.use(requireAuth, requirePermission('packaging.work'));
 
 export const PACKAGING_WORKING: OrderStatus[] = ['AWAITING_PACKAGING', 'PACKAGING_IN_PROGRESS', 'PACKAGING_ON_HOLD', 'PACKAGING_ISSUE'];
 

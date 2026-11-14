@@ -15,6 +15,7 @@ export default function FinalVerificationPage() {
   return (
     <Box>
       <PageHeader overline="Accounts" title="Final Verification" subtitle="Check payments, gate-in and document release, then close the order." />
+      <ListPagination page={paged.page} pageSize={paged.pageSize} total={paged.total} onChange={paged.setPage} noun="orders" placement="top" />
       <Stack spacing={1.5}>
         {isPending && <Skeleton variant="rounded" height={110} />}
         {error && <ErrorState error={error} onRetry={() => refetch()} />}
