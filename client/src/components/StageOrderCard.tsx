@@ -17,7 +17,15 @@ type Props = {
 /** One order in a department queue: identity + action on top, key facts in a row underneath. */
 export default function StageOrderCard({ row, meta, chips, action, highlight }: Props) {
   return (
-    <Card sx={highlight ? { border: '2px solid', borderColor: 'error.main' } : undefined}>
+    <Card
+      sx={{
+        ...(highlight ? { border: '2px solid', borderColor: 'error.main' } : {}),
+        transition: 'box-shadow 260ms cubic-bezier(0.16, 1, 0.3, 1), transform 260ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease',
+        '&:hover': {
+          boxShadow: '0 10px 28px rgba(31, 16, 56, 0.10)',
+        },
+      }}
+    >
       <CardContent>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' } }}>
           <Box sx={{ minWidth: 0 }}>
