@@ -69,8 +69,15 @@ function QueueCard({ row, done }: { row: QcQueueRow; done?: boolean }) {
   return (
     <Card sx={overdue ? { borderColor: 'error.main', borderWidth: 2 } : undefined}>
       <CardContent>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}>
-          <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) 125px 150px 180px 200px' },
+            gap: 2,
+            alignItems: { lg: 'center' },
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
               <Typography sx={{ fontWeight: 700 }}>{row.orderNo}</Typography>
               <StatusChip status={row.status} />
@@ -86,7 +93,14 @@ function QueueCard({ row, done }: { row: QcQueueRow; done?: boolean }) {
             )}
           </Box>
 
-          <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+          {/* On lg+ `contents` lets the 3 meta boxes sit directly in the parent's fixed columns so every card aligns vertically. */}
+          <Box
+            sx={{
+              display: { xs: 'grid', lg: 'contents' },
+              gridTemplateColumns: { xs: 'repeat(auto-fit, minmax(140px, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' },
+              gap: 2,
+            }}
+          >
             <Box>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Expected ready
@@ -104,21 +118,21 @@ function QueueCard({ row, done }: { row: QcQueueRow; done?: boolean }) {
                 {row.sourcingStatus ? SOURCING_LABEL[row.sourcingStatus] : '—'} / {row.qualityCheckStatus ? QUALITY_LABEL[row.qualityCheckStatus] : '—'}
               </Typography>
             </Box>
-            <Box sx={{ minWidth: 150 }}>
+            <Box>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Last update
               </Typography>
-              <Typography>{formatDateTime(row.statusChangedAt)}</Typography>
+              <Typography sx={{ whiteSpace: { lg: 'nowrap' } }}>{formatDateTime(row.statusChangedAt)}</Typography>
             </Box>
-          </Stack>
+          </Box>
 
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', md: 'flex-end' } }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', lg: 'flex-end' } }}>
             <Chip size="small" variant="outlined" icon={<PhotoLibraryOutlined />} label={`${row.mediaCount} photo${row.mediaCount === 1 ? '' : 's'}`} />
             <Button variant={done ? 'outlined' : 'contained'} component={RouterLink} to={`/orders/${row.id}`} sx={{ whiteSpace: 'nowrap' }}>
               {done ? 'View' : row.status === 'AWAITING_QC' ? 'Start' : 'Update'}
             </Button>
           </Stack>
-        </Stack>
+        </Box>
       </CardContent>
     </Card>
   );

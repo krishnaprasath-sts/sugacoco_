@@ -113,3 +113,43 @@ productsRouter.patch('/:id', requirePermission('products.manage'), async (req, r
   }
   res.json({ product: await getProduct(id) });
 });
+
+/**
+ * Delete a product that has never been used on an order (e.g. added by mistake).
+ * Products already linked to orders must be hidden instead so past orders and reports stay intact.
+ */
+productsRouter.delete('/:id', requirePermission('products.manage'), async (req, res) => {
+  const id = parse(idSchema, req.params.id);
+  const product = await getProduct(id);
+  if (product.orderCount > 0) {
+    throw new HttpError(
+      409,
+      `"${product.name}" is used on ${product.orderCount} order${product.orderCount === 1 ? '' : 's'}, so it can't be deleted. Hide it instead so Sales can't pick it on new orders.`,
+    );
+  }
+  try {
+    await withTransaction(async (conn) => {
+      const [result] = await conn.query<ResultSetHeader>('DELETE FROM products WHERE id = ?', [id]);
+      if (!result.affectedRows) throw new HttpError(404, 'Product not found');
+      await audit(
+        req,
+        {
+          action: 'PRODUCT_DELETED',
+          entityType: 'product',
+          entityId: id,
+          changes: { name: product.name, defaultUnit: product.defaultUnit, hsCode: product.hsCode },
+        },
+        conn,
+      );
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === 'ER_ROW_IS_REFERENCED_2') {
+      throw new HttpError(
+        409,
+        `"${product.name}" is used on an order, so it can't be deleted. Hide it instead so Sales can't pick it on new orders.`,
+      );
+    }
+    throw err;
+  }
+  res.json({ ok: true });
+});

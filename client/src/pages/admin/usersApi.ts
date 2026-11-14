@@ -58,6 +58,18 @@ export function useUpdateUser() {
   });
 }
 
+/** Works only for users with no recorded work; others get a 409 telling the admin to deactivate instead. */
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api(`/users/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ['roles'] }); // user counts per role
+    },
+  });
+}
+
 export function useResetPassword() {
   return useMutation({
     mutationFn: ({ id, password }: { id: number; password: string }) =>

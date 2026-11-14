@@ -215,6 +215,16 @@ r = await admin('GET', `/reports/audit?orderNo=SC-`);
 check(r.status === 200 && r.data.total > 0, 'audit log');
 r = await sales('GET', '/reports/orders');
 check(r.status === 403, 'sales cannot open reports');
+r = await admin('GET', '/reports/sales');
+check(r.status === 200 && r.data.rows.some((x) => x.salesName === 'Sales User' && x.orders > 0), 'sales-wise report');
+r = await admin('GET', '/reports/sales?scope=closed&format=csv');
+check(r.status === 200 && String(r.data).includes('Sales person'), 'sales-wise report CSV');
+r = await accounts('GET', '/reports/products');
+check(r.status === 200 && r.data.rows.length > 0 && r.data.rows.every((x) => Number(x.quantity) > 0), 'product-wise report');
+r = await admin('GET', '/reports/products?from=2000-01-01&format=xlsx');
+check(r.status === 200, 'product-wise report Excel');
+r = await qc('GET', '/reports/products');
+check(r.status === 403, 'QC cannot open product-wise report');
 
 // ── Roles & permissions
 r = await sales('GET', '/roles');
@@ -253,5 +263,19 @@ check(r.status === 409, 'role with users cannot be deleted');
 await admin('PATCH', `/users/${verifierUserId}`, { role: 'QC', isActive: false });
 r = await admin('DELETE', `/roles/${customRole.id}`);
 check(r.status === 200, 'empty custom role deleted');
+
+// ── Deleting users
+const me = (await admin('GET', '/auth/me')).data.user;
+r = await admin('DELETE', `/users/${me.id}`);
+check(r.status === 400, 'admin cannot delete own account');
+const salesUser = (await admin('GET', '/users')).data.users.find((u) => u.email === 'sales@sugacoco.test');
+r = await admin('DELETE', `/users/${salesUser.id}`);
+check(r.status === 409, 'user with recorded work cannot be deleted');
+r = await sales('DELETE', `/users/${verifierUserId}`);
+check(r.status === 403, 'sales cannot delete users');
+r = await admin('DELETE', `/users/${verifierUserId}`);
+check(r.status === 200, 'user with no history deleted');
+r = await admin('GET', '/users');
+check(!r.data.users.some((u) => u.id === verifierUserId), 'deleted user gone from list');
 
 console.log(`\nAll ${passed} checks passed.`);

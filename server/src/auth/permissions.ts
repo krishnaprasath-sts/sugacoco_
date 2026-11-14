@@ -36,7 +36,7 @@ export const PERMISSION_GROUPS = [
       { key: 'orders.view_all', label: 'All Orders list', description: 'Read-only list of every order.' },
       { key: 'customers.view', label: 'View customers (read-only)', description: 'Customer list and history without editing.' },
       { key: 'orders.cancel', label: 'Cancel orders', description: 'Cancel an order / PI with a reason. The order becomes read-only.' },
-      { key: 'reports.view', label: 'Reports', description: 'Order and customer balance reports, with downloads.' },
+      { key: 'reports.view', label: 'Reports', description: 'Sales-wise, product-wise, order and customer balance reports, with downloads.', requires: ['pricing.view'] },
       { key: 'pricing.view', label: 'See prices and payments', description: 'Prices, totals, payment details and financial documents. Without it these are hidden.' },
     ],
   },

@@ -162,3 +162,30 @@ usersRouter.post('/:id/reset-password', async (req, res) => {
   });
   res.json({ ok: true });
 });
+
+/**
+ * Delete a user who has no history (e.g. added by mistake). Anyone who created or changed
+ * orders, payments, files etc. stays in the database so that history keeps its names: deactivate them instead.
+ * The foreign keys on users decide this, so new tables are covered automatically.
+ */
+usersRouter.delete('/:id', async (req, res) => {
+  const id = parse(idSchema, req.params.id);
+  if (id === req.user!.id) throw new HttpError(400, 'You cannot delete your own account');
+  const user = await getUser(id);
+  try {
+    await withTransaction(async (conn) => {
+      await conn.query('DELETE FROM notifications WHERE user_id = ?', [id]); // their own inbox, not history
+      await conn.query('DELETE FROM users WHERE id = ?', [id]);
+      await audit(req, { action: 'USER_DELETED', entityType: 'user', entityId: id, changes: { name: user.name, email: user.email, role: user.role } }, conn);
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === 'ER_ROW_IS_REFERENCED_2') {
+      throw new HttpError(
+        409,
+        `${user.name} has work recorded in the system (orders, payments, files or history), so they can't be deleted. Deactivate them instead: they can no longer sign in, and their name stays on past records.`,
+      );
+    }
+    throw err;
+  }
+  res.json({ ok: true });
+});

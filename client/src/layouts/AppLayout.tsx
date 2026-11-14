@@ -7,6 +7,7 @@ import {
   Box,
   ButtonBase,
   CircularProgress,
+  Collapse,
   Divider,
   Drawer,
   IconButton,
@@ -24,8 +25,9 @@ import {
 } from '@mui/material';
 import HamburgerIcon from '../components/HamburgerIcon';
 import LogoutOutlined from '@mui/icons-material/LogoutOutlined';
+import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import { useLogout, useMe } from '../auth/useAuth';
-import { navFor, SHARED_SECTIONS, type NavItem } from '../nav/navConfig';
+import { navFor, SHARED_SECTIONS, type NavItem, type NavMenu } from '../nav/navConfig';
 import Logo from '../components/Logo';
 import { ACTIVE_PILL, BRAND, SIDEBAR_GRADIENT } from '../theme';
 
@@ -33,6 +35,35 @@ const DRAWER_WIDTH = 236;
 /** Sidebar open/close timing, shared by the sidebar, top bar and content so they move together. */
 const SLIDE = '260ms cubic-bezier(0.4, 0, 0.2, 1)';
 const COLLAPSE_KEY = 'sugacoco.sidebarCollapsed';
+
+const NAV_ITEM_SX = {
+  borderRadius: '12px',
+  mb: 0.375,
+  minHeight: 40,
+  px: 1.5,
+  color: 'rgba(255,255,255,0.9)',
+  '& .MuiListItemIcon-root': { color: 'rgba(255,255,255,0.85)', minWidth: 34, '& svg': { fontSize: 20 } },
+  '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
+  '&.Mui-selected, &.Mui-selected:hover': {
+    background: ACTIVE_PILL,
+    color: '#FFFFFF',
+    boxShadow: '0 8px 20px rgba(124, 92, 230, 0.35)',
+  },
+  '&.Mui-selected .MuiListItemIcon-root': { color: '#FFFFFF' },
+  '&.Mui-focusVisible': { outline: '2px solid #FFFFFF', outlineOffset: 2 },
+} as const;
+
+/** Puts items that share a `menu` into one dropdown entry, keeping order. */
+function groupMenus(items: NavItem[]): ({ item: NavItem } | { menu: NavMenu; items: NavItem[] })[] {
+  const out: ({ item: NavItem } | { menu: NavMenu; items: NavItem[] })[] = [];
+  for (const item of items) {
+    const last = out[out.length - 1];
+    if (item.menu && last && 'menu' in last && last.menu.key === item.menu.key) last.items.push(item);
+    else if (item.menu) out.push({ menu: item.menu, items: [item] });
+    else out.push({ item });
+  }
+  return out;
+}
 
 function initials(name: string) {
   return name
@@ -86,6 +117,8 @@ export default function AppLayout() {
   const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
+  // Dropdowns the user opened or closed by hand. Otherwise a dropdown is open while one of its pages is open.
+  const [menuOpen, setMenuOpen] = useState<Record<string, boolean>>({});
 
   if (!user) return null;
   const items = navFor(user);
@@ -108,6 +141,23 @@ export default function AppLayout() {
     else acc.push({ title, items: [item] });
     return acc;
   }, []);
+
+  function renderNavItem(item: NavItem, nested: boolean) {
+    return (
+      <ListItemButton
+        key={item.path}
+        component={NavLink}
+        to={item.path}
+        end
+        selected={item.path === activePath}
+        onClick={() => setMobileOpen(false)}
+        sx={{ ...NAV_ITEM_SX, ...(nested ? { minHeight: 36, '& .MuiListItemIcon-root': { ...NAV_ITEM_SX['& .MuiListItemIcon-root'], minWidth: 30, '& svg': { fontSize: 18 } } } : {}) }}
+      >
+        <ListItemIcon>{item.icon}</ListItemIcon>
+        <ListItemText primary={item.label} slotProps={{ primary: { sx: { fontWeight: 500, fontSize: nested ? 13 : 13.5 } } }} />
+      </ListItemButton>
+    );
+  }
 
   function toggleMenu() {
     if (!isDesktop) {
@@ -175,35 +225,35 @@ export default function AppLayout() {
               </ListSubheader>
             }
           >
-            {section.items.map((item) => (
-              <ListItemButton
-                key={item.path}
-                component={NavLink}
-                to={item.path}
-                end
-                selected={item.path === activePath}
-                onClick={() => setMobileOpen(false)}
-                sx={{
-                  borderRadius: '12px',
-                  mb: 0.375,
-                  minHeight: 40,
-                  px: 1.5,
-                  color: 'rgba(255,255,255,0.9)',
-                  '& .MuiListItemIcon-root': { color: 'rgba(255,255,255,0.85)', minWidth: 34, '& svg': { fontSize: 20 } },
-                  '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
-                  '&.Mui-selected, &.Mui-selected:hover': {
-                    background: ACTIVE_PILL,
-                    color: '#FFFFFF',
-                    boxShadow: '0 8px 20px rgba(124, 92, 230, 0.35)',
-                  },
-                  '&.Mui-selected .MuiListItemIcon-root': { color: '#FFFFFF' },
-                  '&.Mui-focusVisible': { outline: '2px solid #FFFFFF', outlineOffset: 2 },
-                }}
-              >
-                <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.label} slotProps={{ primary: { sx: { fontWeight: 500, fontSize: 13.5 } } }} />
-              </ListItemButton>
-            ))}
+            {groupMenus(section.items).map((entry) => {
+              if (!('menu' in entry)) return renderNavItem(entry.item, false);
+              const { menu, items: children } = entry;
+              const hasActive = children.some((c) => c.path === activePath);
+              const open = menuOpen[menu.key] ?? hasActive;
+              const listId = `nav-menu-${menu.key}`;
+              return (
+                <Box key={menu.key}>
+                  <ListItemButton
+                    onClick={() => setMenuOpen((m) => ({ ...m, [menu.key]: !open }))}
+                    aria-expanded={open}
+                    aria-controls={listId}
+                    sx={{ ...NAV_ITEM_SX, ...(hasActive && !open ? { bgcolor: 'rgba(255,255,255,0.1)' } : {}) }}
+                  >
+                    <ListItemIcon>{menu.icon}</ListItemIcon>
+                    <ListItemText primary={menu.label} slotProps={{ primary: { sx: { fontWeight: 500, fontSize: 13.5 } } }} />
+                    <ExpandMoreRounded
+                      aria-hidden
+                      sx={{ fontSize: 20, color: 'rgba(255,255,255,0.7)', transition: 'transform 200ms', transform: open ? 'rotate(180deg)' : 'none' }}
+                    />
+                  </ListItemButton>
+                  <Collapse in={open} timeout={200} unmountOnExit>
+                    <List id={listId} disablePadding sx={{ ml: 2, pl: 1, borderLeft: '1px solid rgba(255,255,255,0.14)' }}>
+                      {children.map((c) => renderNavItem(c, true))}
+                    </List>
+                  </Collapse>
+                </Box>
+              );
+            })}
           </List>
         ))}
       </Box>

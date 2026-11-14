@@ -20,6 +20,8 @@ import AssessmentOutlined from '@mui/icons-material/AssessmentOutlined';
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined';
 import AdminPanelSettingsOutlined from '@mui/icons-material/AdminPanelSettingsOutlined';
+import BadgeOutlined from '@mui/icons-material/BadgeOutlined';
+import TableChartOutlined from '@mui/icons-material/TableChartOutlined';
 import { can, type Permission, type User } from '../auth/roles';
 
 export type NavSection =
@@ -29,11 +31,16 @@ export type NavSection =
   | 'Packaging'
   | 'Documentation'
   | 'Management'
-  | 'Reports'
+  | 'Inventory'
+  | 'Analytics'
   | 'Administration';
 
 /** Sections that always keep their own heading. The others show as "Home" when the user has only one of them. */
-export const SHARED_SECTIONS: NavSection[] = ['Reports', 'Administration'];
+export const SHARED_SECTIONS: NavSection[] = ['Inventory', 'Analytics', 'Administration'];
+
+/** A collapsible group of menu items inside a section (e.g. Reports ▸ Sales-wise, Product-wise). */
+export type NavMenu = { key: string; label: string; icon: ReactNode };
+export const REPORTS_MENU: NavMenu = { key: 'reports', label: 'Reports', icon: <AssessmentOutlined /> };
 
 export type NavItem = {
   path: string;
@@ -49,6 +56,8 @@ export type NavItem = {
   perm: Permission;
   /** Hide the item when the user has this permission (a fuller version of the same screen is shown instead). */
   hiddenIf?: Permission;
+  /** Show inside this dropdown. Items of one dropdown must be next to each other. */
+  menu?: NavMenu;
 };
 
 const S: NavSection = 'Sales';
@@ -57,7 +66,9 @@ const Q: NavSection = 'QC / Production';
 const P: NavSection = 'Packaging';
 const D: NavSection = 'Documentation';
 const M: NavSection = 'Management';
-const R: NavSection = 'Reports';
+const I: NavSection = 'Inventory';
+// Holds the Reports dropdown and the audit log (heading differs from the dropdown's own label).
+const R: NavSection = 'Analytics';
 const AD: NavSection = 'Administration';
 
 // Screens from the developer document, Sections 5 and 10, in sidebar order.
@@ -89,10 +100,13 @@ export const NAV_ITEMS: NavItem[] = [
   { section: M, perm: 'customers.view', hiddenIf: 'customers.manage', path: '/admin/customers', label: 'Customers', icon: <PeopleOutlined />, description: 'Customer and order history.', phase: 11 },
   { section: M, perm: 'overview.view', path: '/admin/cancellations', label: 'Cancellations', icon: <BlockOutlined />, description: 'Cancelled orders / PIs and reasons.', phase: 11 },
 
-  { section: R, perm: 'reports.view', path: '/reports', label: 'Reports', icon: <AssessmentOutlined />, description: 'Order and customer balance reports.', phase: 12 },
+  { section: I, perm: 'products.manage', path: '/admin/products', label: 'Products', icon: <CategoryOutlined />, description: 'Products Sales can pick on orders.', phase: 2 },
+
+  { section: R, menu: REPORTS_MENU, perm: 'reports.view', path: '/reports/sales', label: 'Sales-wise Report', icon: <BadgeOutlined />, description: 'Orders, value and collections per sales person.', phase: 12 },
+  { section: R, menu: REPORTS_MENU, perm: 'reports.view', path: '/reports/products', label: 'Product-wise Report', icon: <CategoryOutlined />, description: 'Quantity and value sold per product.', phase: 12 },
+  { section: R, menu: REPORTS_MENU, perm: 'reports.view', path: '/reports', label: 'Orders & Balances', icon: <TableChartOutlined />, description: 'Order and customer balance reports.', phase: 12 },
   { section: R, perm: 'audit.view', path: '/admin/audit', label: 'Audit Log', icon: <HistoryOutlined />, description: 'Every change with who and when.', phase: 12 },
 
-  { section: AD, perm: 'products.manage', path: '/admin/products', label: 'Products', icon: <CategoryOutlined />, description: 'Products Sales can pick on orders.', phase: 2 },
   { section: AD, perm: 'users.manage', path: '/admin/users', label: 'Users', icon: <ManageAccountsOutlined />, description: 'Add staff, set roles and reset passwords.', phase: 2 },
   { section: AD, perm: 'roles.manage', path: '/admin/roles', label: 'Roles & Permissions', icon: <AdminPanelSettingsOutlined />, description: 'Create roles and choose what each role can do.', phase: 2 },
 ];

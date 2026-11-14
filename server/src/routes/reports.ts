@@ -169,6 +169,165 @@ reportsRouter.get('/customers', requirePermission('reports.view'), async (req, r
   res.json({ customers: data });
 });
 
+// ───────────── Sales-wise and product-wise ─────────────
+
+/** Shared filters: PI date range and which orders (open / closed / all). Cancelled orders never count. */
+const groupedQuery = z.object({
+  from: date,
+  to: date,
+  scope: z.enum(['all', 'open', 'closed']).default('all'),
+  format,
+});
+type GroupedQuery = z.infer<typeof groupedQuery>;
+
+function groupedWhere(q: GroupedQuery) {
+  const where = ["o.status <> 'CANCELLED'"];
+  const params: unknown[] = [];
+  if (q.from) where.push('o.pi_date >= ?'), params.push(q.from);
+  if (q.to) where.push('o.pi_date <= ?'), params.push(q.to);
+  if (q.scope === 'open') where.push("o.status <> 'CLOSED'");
+  if (q.scope === 'closed') where.push("o.status = 'CLOSED'");
+  const scopeLabel = { all: 'Open and closed orders', open: 'Open orders', closed: 'Closed orders' }[q.scope];
+  const subtitle = [scopeLabel, q.from || q.to ? `PI date ${q.from ?? 'start'} to ${q.to ?? 'today'}` : '', 'Cancelled orders not counted']
+    .filter(Boolean)
+    .join('  ·  ');
+  return { sql: `WHERE ${where.join(' AND ')}`, params, subtitle };
+}
+
+/** One row per sales person (and currency): orders, customers, value, received, outstanding. */
+reportsRouter.get('/sales', requirePermission('reports.view'), async (req, res) => {
+  const q = parse(groupedQuery, req.query);
+  const w = groupedWhere(q);
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT u.id AS salesId, u.name AS salesName, o.currency,
+            COUNT(*) AS orders,
+            COUNT(DISTINCT o.customer_id) AS customers,
+            SUM(o.status <> 'CLOSED') AS open,
+            SUM(o.status = 'CLOSED') AS closed,
+            SUM(o.total_value) AS totalValue,
+            SUM(COALESCE(r.received, 0)) AS received,
+            SUM(o.total_value - o.credit_applied_amount - COALESCE(r.received, 0)) AS outstanding
+     FROM orders o JOIN users u ON u.id = o.created_by
+     LEFT JOIN (${RECEIVED_BY_ORDER}) r ON r.order_id = o.id
+     ${w.sql}
+     GROUP BY u.id, u.name, o.currency
+     ORDER BY o.currency, totalValue DESC`,
+    w.params,
+  );
+  const data = rows.map((r) => ({
+    salesId: Number(r.salesId),
+    salesName: String(r.salesName),
+    currency: String(r.currency),
+    orders: Number(r.orders),
+    customers: Number(r.customers),
+    open: Number(r.open),
+    closed: Number(r.closed),
+    totalValue: Number(r.totalValue).toFixed(2),
+    received: Number(r.received).toFixed(2),
+    outstanding: Number(r.outstanding).toFixed(2),
+    averageOrder: (Number(r.totalValue) / Math.max(1, Number(r.orders))).toFixed(2),
+  }));
+  if (q.format !== 'json') {
+    return sendExport(res, q.format, {
+      name: 'sales-wise-report',
+      title: 'Sales-wise Report',
+      subtitle: w.subtitle,
+      cols: [
+        { header: 'Sales person', width: 22 },
+        { header: 'Currency', width: 9 },
+        { header: 'Orders', type: 'number', width: 8 },
+        { header: 'Open', type: 'number', width: 8 },
+        { header: 'Closed', type: 'number', width: 8 },
+        { header: 'Customers', type: 'number', width: 10 },
+        { header: 'Order value', type: 'money', width: 15 },
+        { header: 'Average order', type: 'money', width: 14 },
+        { header: 'Received', type: 'money', width: 15 },
+        { header: 'Outstanding', type: 'money', width: 15 },
+      ],
+      rows: data.map((r) => [r.salesName, r.currency, r.orders, r.open, r.closed, r.customers, r.totalValue, r.averageOrder, r.received, r.outstanding]),
+      footer: totalsByCurrency(data).map((t) => `${t.currency}: ${t.orders} orders · value ${money2(t.totalValue)} · received ${money2(t.received)} · outstanding ${money2(t.outstanding)}`),
+    });
+  }
+  const totals = totalsByCurrency(data).map((t) => ({
+    ...t,
+    totalValue: t.totalValue.toFixed(2),
+    received: t.received.toFixed(2),
+    outstanding: t.outstanding.toFixed(2),
+  }));
+  res.json({ rows: data, totals });
+});
+
+/** One row per product (and unit, currency): orders, customers, quantity, value, average price. */
+reportsRouter.get('/products', requirePermission('reports.view'), async (req, res) => {
+  const q = parse(groupedQuery, req.query);
+  const w = groupedWhere(q);
+  // Lines linked to the product list group by product; older free-text lines group by name.
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT MAX(COALESCE(p.name, oi.product_name)) AS productName, MAX(oi.product_id) AS productId,
+            oi.unit, o.currency,
+            COUNT(DISTINCT o.id) AS orders,
+            COUNT(DISTINCT o.customer_id) AS customers,
+            SUM(oi.quantity) AS quantity,
+            SUM(COALESCE(oi.quantity_mt, 0)) AS quantityMt,
+            SUM(oi.line_total) AS totalValue
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     LEFT JOIN products p ON p.id = oi.product_id
+     ${w.sql}
+     GROUP BY COALESCE(CONCAT('id:', oi.product_id), CONCAT('name:', LOWER(TRIM(oi.product_name)))), oi.unit, o.currency
+     ORDER BY o.currency, totalValue DESC`,
+    w.params,
+  );
+  const data = rows.map((r) => ({
+    productId: r.productId == null ? null : Number(r.productId),
+    productName: String(r.productName),
+    unit: String(r.unit),
+    currency: String(r.currency),
+    orders: Number(r.orders),
+    customers: Number(r.customers),
+    quantity: Number(r.quantity).toFixed(3),
+    quantityMt: Number(r.quantityMt).toFixed(3),
+    totalValue: Number(r.totalValue).toFixed(2),
+    averagePrice: (Number(r.totalValue) / Math.max(Number(r.quantity), 0.001)).toFixed(2),
+  }));
+  if (q.format !== 'json') {
+    const byCur = new Map<string, number>();
+    for (const r of data) byCur.set(r.currency, (byCur.get(r.currency) ?? 0) + Number(r.totalValue));
+    return sendExport(res, q.format, {
+      name: 'product-wise-report',
+      title: 'Product-wise Report',
+      subtitle: w.subtitle,
+      cols: [
+        { header: 'Product', width: 26 },
+        { header: 'Unit', width: 7 },
+        { header: 'Currency', width: 9 },
+        { header: 'Orders', type: 'number', width: 8 },
+        { header: 'Customers', type: 'number', width: 10 },
+        { header: 'Quantity', type: 'number', width: 12 },
+        { header: 'Quantity (MT)', type: 'number', width: 12 },
+        { header: 'Value', type: 'money', width: 15 },
+        { header: 'Average price', type: 'money', width: 13 },
+      ],
+      rows: data.map((r) => [r.productName, r.unit, r.currency, r.orders, r.customers, Number(r.quantity), Number(r.quantityMt), r.totalValue, r.averagePrice]),
+      footer: [...byCur].map(([cur, v]) => `${cur}: product value ${money2(v)}`),
+    });
+  }
+  res.json({ rows: data });
+});
+
+function totalsByCurrency(rows: { currency: string; orders: number; totalValue: string; received: string; outstanding: string }[]) {
+  const map = new Map<string, { currency: string; orders: number; totalValue: number; received: number; outstanding: number }>();
+  for (const r of rows) {
+    const t = map.get(r.currency) ?? { currency: r.currency, orders: 0, totalValue: 0, received: 0, outstanding: 0 };
+    t.orders += r.orders;
+    t.totalValue += Number(r.totalValue);
+    t.received += Number(r.received);
+    t.outstanding += Number(r.outstanding);
+    map.set(r.currency, t);
+  }
+  return [...map.values()];
+}
+
 /** Modification history. MD/Admin only. */
 reportsRouter.get('/audit', requirePermission('audit.view'), async (req, res) => {
   const q = parse(

@@ -127,9 +127,9 @@ export default function TrackingPage() {
                       <PhoneOutlined fontSize="small" /> {data.company.supportPhone}
                     </Typography>
                   )}
-                  {!data.company.supportEmail && !data.company.supportPhone && (
+                  {/* {!data.company.supportEmail && !data.company.supportPhone && (
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>Please reply to the message that shared this link.</Typography>
-                  )}
+                  )} */}
                 </Stack>
               </CardContent>
             </Card>

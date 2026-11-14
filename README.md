@@ -34,7 +34,9 @@ Rules:
 - The six departments still decide who acts next on an order ("Waiting for Accounts"); a custom role acts at a stage if it has that stage's permission.
 - Every role change is in the audit log (`ROLE_CREATED`, `ROLE_UPDATED`, `ROLE_DELETED`).
 
-Products: MD/Admin adds, edits and hides products under **Administration → Products**. Sales can only pick active products on an order. Hiding a product never changes old orders.
+Products: MD/Admin adds, edits and hides products under **Inventory → Products**. Sales can only pick active products on an order. Hiding a product never changes old orders.
+
+Reports (sidebar **Analytics → Reports**, a dropdown): **Sales-wise Report** (orders, customers, value, received and outstanding per sales person), **Product-wise Report** (orders, quantity, value and average price per product), and **Orders & Balances** (order list and customer balances). All have PI-date and open/closed filters and download as Excel, PDF or CSV. Cancelled orders are not counted in the sales-wise and product-wise reports.
 
 ## Setup (dev)
 1. Start **MySQL** in XAMPP.
@@ -61,7 +63,7 @@ Created by `npm run seed:dev --prefix server`. Sign in at http://localhost:5180.
 
 ## Tests
 With the dev server running: `npm run test:e2e --prefix server`
-Runs 76 API checks over the whole lifecycle (both rejections, gate-in rule, pricing hidden from QC, bad dates/amounts, refunds, zero-advance orders, tracking link, credit, cancel, reports, custom roles and permissions).
+Runs 81 API checks over the whole lifecycle (both rejections, gate-in rule, pricing hidden from QC, bad dates/amounts, refunds, zero-advance orders, tracking link, credit, cancel, reports incl. sales-wise and product-wise, custom roles and permissions).
 
 ## Folders
 ```

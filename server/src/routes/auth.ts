@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { AUTH_COOKIE, cookieOptions, signToken } from '../auth/token.js';
 import { findUserByEmail, toAuthUser } from '../auth/users.js';
-import { requireAuth } from '../middleware/auth.js';
+import { sessionUser } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 
@@ -51,6 +51,8 @@ authRouter.post('/logout', (_req, res) => {
   res.json({ ok: true });
 });
 
-authRouter.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user });
+// Asked on every page load, also before login. "Not signed in" is a normal answer (user: null),
+// not a 401, so the browser console stays clean. Other APIs still return 401 when the session ends.
+authRouter.get('/me', async (req, res) => {
+  res.json({ user: await sessionUser(req) });
 });

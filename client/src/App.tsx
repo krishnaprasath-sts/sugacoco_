@@ -39,6 +39,8 @@ const CancellationsPage = named(() => import('./pages/admin/AdminPages'), 'Cance
 const PendingActionsPage = named(() => import('./pages/admin/AdminPages'), 'PendingActionsPage');
 const AuditLogPage = named(() => import('./pages/reports/ReportsPages'), 'AuditLogPage');
 const ReportsPage = named(() => import('./pages/reports/ReportsPages'), 'ReportsPage');
+const SalesWiseReportPage = named(() => import('./pages/reports/GroupedReports'), 'SalesWiseReportPage');
+const ProductWiseReportPage = named(() => import('./pages/reports/GroupedReports'), 'ProductWiseReportPage');
 
 
 // Built screens. Any nav path not listed here shows the placeholder.
@@ -65,6 +67,8 @@ const PAGES: Record<string, ReactNode> = {
   '/admin/customers': <CustomersPage basePath="/admin/customers" readOnly />,
   '/admin/cancellations': <CancellationsPage />,
   '/reports': <ReportsPage />,
+  '/reports/sales': <SalesWiseReportPage />,
+  '/reports/products': <ProductWiseReportPage />,
   '/admin/audit': <AuditLogPage />,
   '/admin/products': <ProductsPage />,
   '/admin/users': <UsersPage />,

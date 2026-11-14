@@ -37,7 +37,7 @@ import ContentCopyOutlined from '@mui/icons-material/ContentCopyOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import PageHeader from '../../components/PageHeader';
 import ErrorState from '../../components/ErrorState';
-import { useToast } from '../../components/useToast';
+import { useConfirm, useToast } from '../../components/useToast';
 import { useMe } from '../../auth/useAuth';
 import type { Permission } from '../../auth/roles';
 import { fieldErrors, formError } from '../../lib/formErrors';
@@ -62,13 +62,14 @@ export default function RolesPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
   const [newRole, setNewRole] = useState<{ copyFrom: ManagedRole | null } | null>(null);
+  const confirm = useConfirm();
 
   const roles = data?.roles ?? [];
   const selected = roles.find((r) => r.id === selectedId) ?? roles[0];
 
-  function select(id: number) {
+  async function select(id: number) {
     if (id === selected?.id) return;
-    if (dirty && !window.confirm('You have unsaved changes on this role. Discard them?')) return;
+    if (dirty && !(await confirm({ title: 'Discard unsaved changes?', message: 'You changed this role but did not save.', confirmLabel: 'Discard', danger: true }))) return;
     setDirty(false);
     setSelectedId(id);
     setTab('edit');
@@ -205,6 +206,7 @@ type EditorProps = {
 function RoleEditor({ role, data, onDirtyChange, onCopy, onDeleted }: EditorProps) {
   const { data: me } = useMe();
   const toast = useToast();
+  const confirm = useConfirm();
   const update = useUpdateRole();
   const remove = useDeleteRole();
   const [name, setName] = useState(role.name);
@@ -267,8 +269,8 @@ function RoleEditor({ role, data, onDirtyChange, onCopy, onDeleted }: EditorProp
     );
   }
 
-  function onDelete() {
-    if (!window.confirm(`Delete the ${role.name} role? This cannot be undone.`)) return;
+  async function onDelete() {
+    if (!(await confirm({ title: `Delete the ${role.name} role?`, message: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return;
     remove.mutate(role.id, {
       onSuccess: () => {
         toast(`${role.name} deleted`);

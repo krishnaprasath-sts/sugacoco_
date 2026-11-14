@@ -55,7 +55,7 @@ import { fieldErrors, formError } from '../../lib/formErrors';
 import { formatDate, formatDateTime, formatMoney } from '../../lib/format';
 import { parseNum } from '../../lib/money';
 import { copyText } from '../../lib/copyText';
-import { useToast } from '../../components/useToast';
+import { useConfirm, useToast } from '../../components/useToast';
 
 const actionCardSx = { border: '2px solid', borderColor: 'primary.main' } as const;
 /** Stages where Documentation can still add containers or change booking/loading details. */
@@ -318,6 +318,7 @@ function ContainerDialog({ detail, container, onClose }: { detail: OrderDetail; 
 }
 
 export function ContainersCard({ detail }: { detail: OrderDetail }) {
+  const confirm = useConfirm();
   const { containers, permissions } = detail;
   const [editing, setEditing] = useState<Container | 'new' | null>(null);
   const remove = useDeleteContainer(detail.order.id);
@@ -351,8 +352,8 @@ export function ContainersCard({ detail }: { detail: OrderDetail }) {
                       <Tooltip title="Remove">
                         <IconButton
                           aria-label="Remove container"
-                          onClick={() => {
-                            if (window.confirm(`Remove container ${c.containerNo ?? ''}? This cannot be undone.`)) {
+                          onClick={async () => {
+                            if (await confirm({ title: `Remove container ${c.containerNo ?? ''}?`, message: 'This cannot be undone.', confirmLabel: 'Remove', danger: true })) {
                               remove.mutate({ id: c.id }, { onSuccess: () => toast('Container removed'), onError: (e) => toast(formError(e) ?? 'Could not remove', 'error') });
                             }
                           }}

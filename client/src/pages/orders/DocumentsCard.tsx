@@ -35,7 +35,7 @@ import { formError } from '../../lib/formErrors';
 import { useMe } from '../../auth/useAuth';
 import FilePicker from '../../components/FilePicker';
 import EmptyState from '../../components/EmptyState';
-import { useToast } from '../../components/useToast';
+import { useConfirm, useToast } from '../../components/useToast';
 
 function fileIcon(mime: string) {
   if (mime === 'application/pdf') return <PictureAsPdfOutlined />;
@@ -46,6 +46,7 @@ function fileIcon(mime: string) {
 const formatSize = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`);
 
 export default function DocumentsCard({ detail }: { detail: OrderDetail }) {
+  const confirm = useConfirm();
   const { data: me } = useMe();
   const toast = useToast();
   const remove = useRemoveDocument(detail.order.id);
@@ -105,8 +106,9 @@ export default function DocumentsCard({ detail }: { detail: OrderDetail }) {
                             <Tooltip title="Remove">
                               <IconButton
                                 aria-label={`Remove ${d.originalName}`}
-                                onClick={() => {
-                                  if (!window.confirm(`Remove "${d.originalName}"? It stays in the audit history.`)) return;
+                                onClick={async () => {
+                                  const ok = await confirm({ title: `Remove "${d.originalName}"?`, message: 'It stays in the audit history.', confirmLabel: 'Remove', danger: true });
+                                  if (!ok) return;
                                   remove.mutate(d.id, {
                                     onSuccess: () => toast('Document removed'),
                                     onError: (err) => toast(formError(err) ?? 'Could not remove', 'error'),

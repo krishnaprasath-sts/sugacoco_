@@ -2,22 +2,25 @@ import { useMemo, useState } from 'react';
 import { Box, Button, Card, IconButton, InputAdornment, Stack, Switch, TextField, Tooltip, Typography } from '@mui/material';
 import AddCircleOutline from '@mui/icons-material/AddCircleOutlineOutlined';
 import EditOutlined from '@mui/icons-material/EditOutlined';
+import DeleteOutlineOutlined from '@mui/icons-material/DeleteOutlineOutlined';
 import SearchOutlined from '@mui/icons-material/SearchOutlined';
 import CategoryOutlined from '@mui/icons-material/CategoryOutlined';
 import PageHeader from '../../components/PageHeader';
 import ResponsiveTable from '../../components/ResponsiveTable';
 import EmptyState from '../../components/EmptyState';
 import ErrorState from '../../components/ErrorState';
-import { useToast } from '../../components/useToast';
+import { useConfirm, useToast } from '../../components/useToast';
 import { formError } from '../../lib/formErrors';
-import { useProducts, useUpdateProduct, type Product } from './productsApi';
+import { useDeleteProduct, useProducts, useUpdateProduct, type Product } from './productsApi';
 import ProductFormDialog from './ProductFormDialog';
 
 /** MD/Admin keeps the product list. Sales can only pick active products on an order. */
 export default function ProductsPage() {
   const { data: products = [], isPending, error, refetch } = useProducts();
   const update = useUpdateProduct();
+  const remove = useDeleteProduct();
   const toast = useToast();
+  const confirm = useConfirm();
   const [dialog, setDialog] = useState<{ product: Product | null } | null>(null);
   const [search, setSearch] = useState('');
 
@@ -27,8 +30,30 @@ export default function ProductsPage() {
   }, [products, search]);
   const activeCount = products.filter((p) => p.isActive).length;
 
-  function toggle(p: Product) {
-    if (p.isActive && !window.confirm(`Hide ${p.name}? Sales can no longer pick it on new orders. Old orders are not changed.`)) return;
+  async function deleteProduct(p: Product) {
+    const ok = await confirm({
+      title: `Delete ${p.name}?`,
+      message: 'This product will be removed permanently. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    remove.mutate(p.id, {
+      onSuccess: () => toast(`${p.name} deleted`),
+      onError: (err) => toast(formError(err) ?? 'Could not delete product', 'error'),
+    });
+  }
+
+  async function toggle(p: Product) {
+    if (p.isActive) {
+      const ok = await confirm({
+        title: `Hide ${p.name}?`,
+        message: 'Sales can no longer pick it on new orders. Old orders are not changed.',
+        confirmLabel: 'Hide',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     update.mutate(
       { id: p.id, isActive: !p.isActive },
       {
@@ -104,20 +129,35 @@ export default function ProductsPage() {
                 ),
               },
               {
-                label: 'Edit',
+                label: 'Actions',
                 align: 'right',
+                nowrap: true,
                 mobile: 'end',
                 hideMobileLabel: true,
                 render: (p) => (
-                  <Tooltip title="Edit">
-                    <IconButton
-                      aria-label={`Edit ${p.name}`}
-                      onClick={() => setDialog({ product: p })}
-                      sx={{ bgcolor: '#E8F0FE', color: '#2563EB', '&:hover': { bgcolor: '#D6E4FD' } }}
-                    >
-                      <EditOutlined />
-                    </IconButton>
-                  </Tooltip>
+                  <Box sx={{ whiteSpace: 'nowrap' }}>
+                    <Tooltip title="Edit">
+                      <IconButton
+                        aria-label={`Edit ${p.name}`}
+                        onClick={() => setDialog({ product: p })}
+                        sx={{ bgcolor: '#E8F0FE', color: '#2563EB', mr: 1, '&:hover': { bgcolor: '#D6E4FD' } }}
+                      >
+                        <EditOutlined />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={p.orderCount > 0 ? 'Used on orders — hide it instead' : 'Delete'}>
+                      <span>
+                        <IconButton
+                          aria-label={`Delete ${p.name}`}
+                          onClick={() => deleteProduct(p)}
+                          disabled={p.orderCount > 0 || remove.isPending}
+                          sx={{ bgcolor: '#FDECEC', color: '#DC2626', '&:hover': { bgcolor: '#FBDADA' }, '&.Mui-disabled': { bgcolor: '#F3F4F6' } }}
+                        >
+                          <DeleteOutlineOutlined />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Box>
                 ),
               },
             ]}

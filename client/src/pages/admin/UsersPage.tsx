@@ -7,7 +7,6 @@ import {
   Chip,
   IconButton,
   Skeleton,
-  Snackbar,
   Stack,
   Switch,
   Table,
@@ -24,11 +23,13 @@ import {
 import PersonAddAlt1Outlined from '@mui/icons-material/PersonAddAlt1Outlined';
 import EditOutlined from '@mui/icons-material/EditOutlined';
 import LockResetOutlined from '@mui/icons-material/LockResetOutlined';
+import DeleteOutlineOutlined from '@mui/icons-material/DeleteOutlineOutlined';
 import { useMe } from '../../auth/useAuth';
 import { formError } from '../../lib/formErrors';
 import { formatDateTime } from '../../lib/format';
 import PageHeader from '../../components/PageHeader';
-import { useUpdateUser, useUsers, type ManagedUser } from './usersApi';
+import { useConfirm, useToast } from '../../components/useToast';
+import { useDeleteUser, useUpdateUser, useUsers, type ManagedUser } from './usersApi';
 import UserFormDialog from './UserFormDialog';
 import ResetPasswordDialog from './ResetPasswordDialog';
 
@@ -87,7 +88,8 @@ function ActiveSwitch(props: { user: ManagedUser; isSelf: boolean; disabled: boo
   );
 }
 
-function RowActions({ user, onEdit, onReset }: { user: ManagedUser; onEdit: () => void; onReset: () => void }) {
+function RowActions(props: { user: ManagedUser; isSelf: boolean; onEdit: () => void; onReset: () => void; onDelete: () => void }) {
+  const { user, isSelf, onEdit, onReset, onDelete } = props;
   return (
     <Box sx={{ whiteSpace: 'nowrap' }}>
       <Tooltip title="Edit">
@@ -96,9 +98,21 @@ function RowActions({ user, onEdit, onReset }: { user: ManagedUser; onEdit: () =
         </IconButton>
       </Tooltip>
       <Tooltip title="Reset password">
-        <IconButton aria-label={`Reset password for ${user.name}`} onClick={onReset} sx={{ bgcolor: "#FDECEC", color: "#DC2626", "&:hover": { bgcolor: "#FBDADA" } }}>
+        <IconButton aria-label={`Reset password for ${user.name}`} onClick={onReset} sx={{ bgcolor: "#FEF3C7", color: "#B45309", mr: 1, "&:hover": { bgcolor: "#FDE8A8" } }}>
           <LockResetOutlined />
         </IconButton>
+      </Tooltip>
+      <Tooltip title={isSelf ? 'You cannot delete your own account' : 'Delete'}>
+        <span>
+          <IconButton
+            aria-label={`Delete ${user.name}`}
+            onClick={onDelete}
+            disabled={isSelf}
+            sx={{ bgcolor: "#FDECEC", color: "#DC2626", "&:hover": { bgcolor: "#FBDADA" }, "&.Mui-disabled": { bgcolor: "#F3F4F6" } }}
+          >
+            <DeleteOutlineOutlined />
+          </IconButton>
+        </span>
       </Tooltip>
     </Box>
   );
@@ -110,21 +124,45 @@ export default function UsersPage() {
   const { data: me } = useMe();
   const { data: users, isPending, error } = useUsers();
   const update = useUpdateUser();
+  const remove = useDeleteUser();
   const [dialog, setDialog] = useState<DialogState>(null);
-  const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   function saved(message: string) {
     setDialog(null);
-    setToast({ message });
+    toast(message);
   }
 
-  function toggleActive(user: ManagedUser) {
-    if (user.isActive && !window.confirm(`Deactivate ${user.name}? They are signed out at once and cannot log in until activated again.`)) return;
+  async function deleteUser(user: ManagedUser) {
+    const ok = await confirm({
+      title: `Delete ${user.name}?`,
+      message: `${user.email} will be removed for good. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    remove.mutate(user.id, {
+      onSuccess: () => toast(`${user.name} deleted`),
+      onError: (err) => toast(formError(err) ?? 'Could not delete user', 'error'),
+    });
+  }
+
+  async function toggleActive(user: ManagedUser) {
+    if (user.isActive) {
+      const ok = await confirm({
+        title: `Deactivate ${user.name}?`,
+        message: 'They are signed out at once and cannot log in until activated again.',
+        confirmLabel: 'Deactivate',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     update.mutate(
       { id: user.id, isActive: !user.isActive },
       {
-        onSuccess: () => setToast({ message: `${user.name} ${user.isActive ? 'deactivated' : 'activated'}` }),
-        onError: (err) => setToast({ message: formError(err) ?? 'Could not update user', error: true }),
+        onSuccess: () => toast(`${user.name} ${user.isActive ? 'deactivated' : 'activated'}`),
+        onError: (err) => toast(formError(err) ?? 'Could not update user', 'error'),
       },
     );
   }
@@ -160,7 +198,7 @@ export default function UsersPage() {
                 </Typography>
                 <Stack direction="row" sx={{ mt: 1, alignItems: 'center', justifyContent: 'space-between' }}>
                   <ActiveSwitch user={u} isSelf={isSelf} disabled={update.isPending} onToggle={toggleActive} />
-                  <RowActions user={u} onEdit={() => setDialog({ kind: 'edit', user: u })} onReset={() => setDialog({ kind: 'reset', user: u })} />
+                  <RowActions user={u} isSelf={isSelf} onEdit={() => setDialog({ kind: 'edit', user: u })} onReset={() => setDialog({ kind: 'reset', user: u })} onDelete={() => deleteUser(u)} />
                 </Stack>
               </Card>
             );
@@ -208,7 +246,7 @@ export default function UsersPage() {
                       <ActiveSwitch user={u} isSelf={isSelf} disabled={update.isPending} onToggle={toggleActive} />
                     </TableCell>
                     <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                      <RowActions user={u} onEdit={() => setDialog({ kind: 'edit', user: u })} onReset={() => setDialog({ kind: 'reset', user: u })} />
+                      <RowActions user={u} isSelf={isSelf} onEdit={() => setDialog({ kind: 'edit', user: u })} onReset={() => setDialog({ kind: 'reset', user: u })} onDelete={() => deleteUser(u)} />
                     </TableCell>
                   </TableRow>
                 );
@@ -229,17 +267,6 @@ export default function UsersPage() {
       {dialog?.kind === 'reset' && (
         <ResetPasswordDialog user={dialog.user} onClose={() => setDialog(null)} onSaved={saved} />
       )}
-
-      <Snackbar
-        open={!!toast}
-        autoHideDuration={4000}
-        onClose={() => setToast(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={toast?.error ? 'error' : 'success'} variant="filled" onClose={() => setToast(null)}>
-          {toast?.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }

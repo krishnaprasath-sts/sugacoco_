@@ -42,3 +42,12 @@ export function useUpdateProduct() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+/** Works only for products not used on any order; used ones get a 409 telling the admin to hide them instead. */
+export function useDeleteProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api(`/products/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
