@@ -481,11 +481,12 @@ export default function OrderFormPage() {
                             required
                             value={adv.amount}
                             onChange={(e) => setAdv({ ...adv, amount: e.target.value })}
-                            helperText={`Expected advance: ${money(totals.advance)}`}
+                            error={!!errors.amount}
+                            helperText={errors.amount ?? `Expected advance: ${money(totals.advance)}`}
                           />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6 }}>
-                          <TextField label="Payment date" type="date" value={adv.paymentDate} onChange={(e) => setAdv({ ...adv, paymentDate: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+                          <TextField label="Payment date" type="date" value={adv.paymentDate} onChange={(e) => setAdv({ ...adv, paymentDate: e.target.value })} error={!!errors.paymentDate} helperText={errors.paymentDate} slotProps={{ inputLabel: { shrink: true } }} />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6 }}>
                           <TextField label="Bank reference / UTR / SWIFT" value={adv.bankReference} onChange={(e) => setAdv({ ...adv, bankReference: e.target.value })} />

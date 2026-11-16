@@ -94,8 +94,8 @@ export default function ResponsiveTable<T>({ columns, rows, rowKey, loading, min
               '&:last-of-type': { borderBottom: 0 },
               cursor: onRowClick ? 'pointer' : undefined,
               transition: 'background-color 180ms ease',
-              '&:hover': onRowClick ? { bgcolor: '#FAF7FC' } : undefined,
-              '&:active': onRowClick ? { bgcolor: '#F4EFF9' } : undefined,
+              '&:hover': onRowClick ? { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#FAF7FC' } : undefined,
+              '&:active': onRowClick ? { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#F4EFF9' } : undefined,
             }}
           >
             {(titles.length > 0 || ends.length > 0) && (

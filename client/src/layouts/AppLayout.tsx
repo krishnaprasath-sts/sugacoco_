@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import NotificationBell from '../components/NotificationBell';
+import ThemeToggle from '../components/ThemeToggle';
 import {
   AppBar,
   Avatar,
@@ -94,7 +95,7 @@ function Clock() {
         px: 2,
         py: 0.75,
         borderRadius: 999,
-        bgcolor: '#F1F0F6',
+        bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#F1F0F6'),
         color: 'text.primary',
         fontSize: 12.5,
         whiteSpace: 'nowrap',
@@ -284,7 +285,8 @@ export default function AppLayout() {
           width: { md: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%' },
           ml: { md: showSidebar ? `${DRAWER_WIDTH}px` : 0 },
           bgcolor: 'background.paper',
-          borderBottom: '1px solid #ECEAF2',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           transition: `width ${SLIDE}, margin-left ${SLIDE}`,
         }}
       >
@@ -312,6 +314,7 @@ export default function AppLayout() {
             <Clock />
           </Box>
 
+          <ThemeToggle />
           <NotificationBell />
           <ButtonBase
             onClick={(e) => setMenuAnchor(e.currentTarget)}

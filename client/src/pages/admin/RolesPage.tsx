@@ -170,8 +170,13 @@ function RoleList({ roles, selectedId, onSelect }: { roles: ManagedRole[]; selec
               sx={{
                 borderRadius: '12px',
                 mb: 0.5,
-                '&.Mui-selected': { bgcolor: '#F3ECF7', boxShadow: `inset 3px 0 0 ${BRAND.plum}` },
-                '&.Mui-selected:hover': { bgcolor: '#EDE3F3' },
+                '&.Mui-selected': {
+                  bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(181, 89, 192, 0.20)' : '#F3ECF7',
+                  boxShadow: (t) => `inset 3px 0 0 ${t.palette.mode === 'dark' ? BRAND.darkPrimary : BRAND.plum}`,
+                },
+                '&.Mui-selected:hover': {
+                  bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(181, 89, 192, 0.28)' : '#EDE3F3',
+                },
               }}
             >
               <ListItemText
@@ -366,7 +371,8 @@ function RoleEditor({ role, data, onDirtyChange, onCopy, onDeleted }: EditorProp
           p: 2,
           px: { md: 3 },
           alignItems: { sm: 'center' },
-          position: 'sticky',
+          // On phones the buttons stack; kept sticky they would cover a third of the screen.
+          position: { sm: 'sticky' },
           bottom: 0,
           bgcolor: 'background.paper',
           borderBottomLeftRadius: '24px',
@@ -419,7 +425,13 @@ function PermissionGroupBlock(props: {
       <Stack direction="row" sx={{ alignItems: 'baseline', mb: 0.75 }}>
         <Typography
           component="legend"
-          sx={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: BRAND.plum }}
+          sx={{
+            fontSize: 11.5,
+            fontWeight: 700,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: (t) => t.palette.mode === 'dark' ? '#D6A8E4' : BRAND.plum,
+          }}
         >
           {group.title}
         </Typography>
@@ -451,11 +463,17 @@ function PermissionGroupBlock(props: {
                 pr: 1.5,
                 borderRadius: '14px',
                 border: '1px solid',
-                borderColor: checked ? '#D9C4E4' : '#ECE8F1',
-                bgcolor: checked ? '#FAF5FC' : 'background.paper',
+                borderColor: (t) => checked
+                  ? (t.palette.mode === 'dark' ? '#5E2B6D' : '#D9C4E4')
+                  : (t.palette.mode === 'dark' ? '#2E223D' : '#ECE8F1'),
+                bgcolor: (t) => checked
+                  ? (t.palette.mode === 'dark' ? 'rgba(181, 89, 192, 0.12)' : '#FAF5FC')
+                  : (t.palette.mode === 'dark' ? '#140E1E' : 'background.paper'),
                 cursor: reason ? 'default' : 'pointer',
                 transition: 'background-color 150ms, border-color 150ms',
-                '&:hover': reason ? undefined : { borderColor: '#CDB3DB' },
+                '&:hover': reason ? undefined : {
+                  borderColor: (t) => t.palette.mode === 'dark' ? '#8E3FB0' : '#CDB3DB',
+                },
               }}
             >
               <Checkbox
@@ -515,7 +533,14 @@ function CompareTable({ data, onPick }: { data: RolesResponse; onPick: (id: numb
               <TableRow key={g.title}>
                 <TableCell
                   colSpan={data.roles.length + 1}
-                  sx={{ bgcolor: '#F7F3FA', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: BRAND.plum }}
+                  sx={{
+                    bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(181, 89, 192, 0.16)' : '#F7F3FA',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    color: (t) => t.palette.mode === 'dark' ? '#D6A8E4' : BRAND.plum,
+                  }}
                 >
                   {g.title}
                 </TableCell>

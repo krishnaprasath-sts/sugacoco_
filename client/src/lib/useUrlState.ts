@@ -26,9 +26,9 @@ export function useUrlState(key: string, fallback = ''): [string, (value: string
   return [value, set];
 }
 
-/** Page number in the URL (?page=2). */
-export function useUrlPage(): [number, (page: number) => void] {
-  const [raw, set] = useUrlState('page', '1');
+/** Page number in the URL (?page=2). Pass a key when one screen has several paged lists. */
+export function useUrlPage(key = 'page'): [number, (page: number) => void] {
+  const [raw, set] = useUrlState(key, '1');
   const page = Math.max(1, Number(raw) || 1);
   return [page, (p: number) => set(String(p))];
 }

@@ -1,11 +1,11 @@
 import '@fontsource-variable/dm-sans';
+import './index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { CssBaseline, ThemeProvider } from '@mui/material';
-import { theme } from './theme';
 import App from './App';
+import { ThemeModeProvider } from './ThemeContext';
 import { ToastProvider } from './components/useToast';
 import { ApiError } from './lib/api';
 import { installSelectGuard } from './lib/selectGuard';
@@ -41,14 +41,13 @@ const queryClient: QueryClient = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <ThemeModeProvider>
         <ToastProvider>
           <BrowserRouter>
             <App />
           </BrowserRouter>
         </ToastProvider>
-      </ThemeProvider>
+      </ThemeModeProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

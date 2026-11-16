@@ -64,7 +64,16 @@ export function DonutChart({ data, loading, centerLabel = 'Total' }: { data: Sli
             key={d.label}
             direction="row"
             spacing={1.25}
-            sx={{ alignItems: 'center', px: 1, py: 0.5, borderRadius: 1, bgcolor: hover === i ? '#F6F4FA' : 'transparent', cursor: 'default' }}
+            sx={{
+              alignItems: 'center',
+              px: 1,
+              py: 0.5,
+              borderRadius: 1,
+              bgcolor: (t) => hover === i
+                ? (t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#F6F4FA')
+                : 'transparent',
+              cursor: 'default',
+            }}
             onMouseEnter={() => setHover(i)}
             onMouseLeave={() => setHover(null)}
           >
@@ -96,7 +105,7 @@ export function BarList({ data, loading, color = '#6B2170' }: { data: Bar[]; loa
               <Typography variant="body2">{d.label}</Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{d.display ?? d.value}</Typography>
             </Stack>
-            <Box sx={{ height: 12, borderRadius: '6px', bgcolor: '#F1F0F6', overflow: 'hidden' }} role="img" aria-label={`${d.label}: ${d.display ?? d.value}`}>
+            <Box sx={{ height: 12, borderRadius: '6px', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#F1F0F6', overflow: 'hidden' }} role="img" aria-label={`${d.label}: ${d.display ?? d.value}`}>
               <Box className="bar" sx={{ height: '100%', width: `${(d.value / max) * 100}%`, minWidth: d.value > 0 ? 6 : 0, bgcolor: color, borderRadius: '0 4px 4px 0', transition: 'width 300ms ease' }} />
             </Box>
           </Box>

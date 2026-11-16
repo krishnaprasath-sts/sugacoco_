@@ -46,7 +46,7 @@ export default function NotificationBell() {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{
           paper: {
-            sx: { mt: '6px', width: { xs: 'calc(100vw - 24px)', sm: 380 }, maxHeight: 480, display: 'flex', flexDirection: 'column', border: '1px solid #ECEAF2', boxShadow: '0 12px 32px rgba(31,16,56,0.14)' },
+            sx: { mt: '6px', width: { xs: 'calc(100vw - 24px)', sm: 380 }, maxHeight: 480, display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', boxShadow: '0 12px 32px rgba(31,16,56,0.14)' },
           },
         }}
       >
@@ -78,9 +78,10 @@ export default function NotificationBell() {
               role="listitem"
               sx={{
                 position: 'relative',
-                borderBottom: '1px solid #F0EDF5',
-                bgcolor: n.readAt ? 'transparent' : '#F7F1FA',
-                '&:hover': { bgcolor: '#F1F0F6' },
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                bgcolor: (t) => n.readAt ? 'transparent' : (t.palette.mode === 'dark' ? 'rgba(181, 89, 192, 0.12)' : '#F7F1FA'),
+                '&:hover': { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#F1F0F6' },
                 '&:hover .dismiss, & .dismiss:focus-visible': { opacity: 1 },
               }}
             >
