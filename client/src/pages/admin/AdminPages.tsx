@@ -149,13 +149,13 @@ export function AdminOverviewPage() {
                             ['Received', m.received],
                             ['Outstanding', m.outstanding],
                           ].map(([l, v]) => (
-                            <Grid key={l} size={4}>
+                            <Grid key={l} size={{ xs: 12, sm: 4 }} sx={{ display: { xs: 'flex', sm: 'block' }, justifyContent: 'space-between', alignItems: 'baseline', gap: 2 }}>
                               <Typography variant="body2" sx={{ color: 'text.secondary' }}>{l}</Typography>
                               <Typography sx={{ fontWeight: 700, fontSize: { xs: 15, sm: 18 } }}>{formatMoney(v, m.currency)}</Typography>
                             </Grid>
                           ))}
                         </Grid>
-                        <LinearProgress variant="determinate" value={Math.min(100, pct)} color="success" sx={{ height: 8, borderRadius: 4, mt: 1, bgcolor: '#F1F0F6' }} aria-label={`${Math.round(pct)}% received`} />
+                        <LinearProgress variant="determinate" value={Math.min(100, pct)} color="success" sx={{ height: 8, borderRadius: 4, mt: 1, bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#F1F0F6' }} aria-label={`${Math.round(pct)}% received`} />
                         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>{Math.round(pct)}% received across {m.orders} open orders</Typography>
                       </Box>
                     );

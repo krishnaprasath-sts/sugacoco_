@@ -9,8 +9,9 @@ import PhoneOutlined from '@mui/icons-material/PhoneOutlined';
 import { usePublicTracking } from '../api/stages';
 import { formatDate, formatDateTime } from '../lib/format';
 import { formError } from '../lib/formErrors';
+import { ThemeProvider } from '@mui/material/styles';
 import Logo from '../components/Logo';
-import { SIDEBAR_GRADIENT } from '../theme';
+import { LIGHT_THEME, SIDEBAR_GRADIENT } from '../theme';
 
 export default function TrackingPage() {
   const token = useParams().token ?? '';
@@ -18,7 +19,8 @@ export default function TrackingPage() {
   const o = data?.order;
 
   return (
-    <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
+    <ThemeProvider theme={LIGHT_THEME}>
+      <Box sx={{ minHeight: '100dvh', bgcolor: '#F4F5FA', color: '#111827' }}>
       <Box sx={{ background: SIDEBAR_GRADIENT, color: '#fff', px: 2, pt: 3, pb: 10 }}>
         <Box sx={{ maxWidth: 720, mx: 'auto' }}>
           <Logo height={52} />
@@ -137,5 +139,6 @@ export default function TrackingPage() {
         )}
       </Box>
     </Box>
+    </ThemeProvider>
   );
 }

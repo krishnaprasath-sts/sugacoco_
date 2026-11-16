@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import NotificationBell from '../components/NotificationBell';
+import ThemeToggle from '../components/ThemeToggle';
 import {
   AppBar,
   Avatar,
@@ -42,12 +43,17 @@ const NAV_ITEM_SX = {
   minHeight: 40,
   px: 1.5,
   color: 'rgba(255,255,255,0.9)',
-  '& .MuiListItemIcon-root': { color: 'rgba(255,255,255,0.85)', minWidth: 34, '& svg': { fontSize: 20 } },
-  '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
+  transition: 'background 220ms ease, background-color 220ms ease, color 200ms ease, box-shadow 260ms cubic-bezier(0.16, 1, 0.3, 1), transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+  '& .MuiListItemIcon-root': { color: 'rgba(255,255,255,0.85)', minWidth: 34, transition: 'color 200ms ease, transform 180ms ease', '& svg': { fontSize: 20 } },
+  '&:hover': {
+    bgcolor: 'rgba(255,255,255,0.08)',
+    transform: 'translateX(3px)',
+  },
   '&.Mui-selected, &.Mui-selected:hover': {
     background: ACTIVE_PILL,
     color: '#FFFFFF',
     boxShadow: '0 8px 20px rgba(124, 92, 230, 0.35)',
+    transform: 'none',
   },
   '&.Mui-selected .MuiListItemIcon-root': { color: '#FFFFFF' },
   '&.Mui-focusVisible': { outline: '2px solid #FFFFFF', outlineOffset: 2 },
@@ -89,7 +95,7 @@ function Clock() {
         px: 2,
         py: 0.75,
         borderRadius: 999,
-        bgcolor: '#F1F0F6',
+        bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#F1F0F6'),
         color: 'text.primary',
         fontSize: 12.5,
         whiteSpace: 'nowrap',
@@ -279,7 +285,8 @@ export default function AppLayout() {
           width: { md: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%' },
           ml: { md: showSidebar ? `${DRAWER_WIDTH}px` : 0 },
           bgcolor: 'background.paper',
-          borderBottom: '1px solid #ECEAF2',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           transition: `width ${SLIDE}, margin-left ${SLIDE}`,
         }}
       >
@@ -307,6 +314,7 @@ export default function AppLayout() {
             <Clock />
           </Box>
 
+          <ThemeToggle />
           <NotificationBell />
           <ButtonBase
             onClick={(e) => setMenuAnchor(e.currentTarget)}
@@ -397,10 +405,10 @@ export default function AppLayout() {
           <Box
             key={location.pathname}
             sx={{
-              animation: 'pageIn 280ms cubic-bezier(0.2, 0, 0, 1) both',
+              animation: 'pageIn 340ms cubic-bezier(0.16, 1, 0.3, 1) both',
               '@keyframes pageIn': {
-                from: { opacity: 0, transform: 'translateY(8px)' },
-                to: { opacity: 1, transform: 'none' },
+                '0%': { opacity: 0, transform: 'translateY(10px)' },
+                '100%': { opacity: 1, transform: 'translateY(0)' },
               },
             }}
           >

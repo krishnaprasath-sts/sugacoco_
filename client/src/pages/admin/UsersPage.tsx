@@ -93,12 +93,30 @@ function RowActions(props: { user: ManagedUser; isSelf: boolean; onEdit: () => v
   return (
     <Box sx={{ whiteSpace: 'nowrap' }}>
       <Tooltip title="Edit">
-        <IconButton aria-label={`Edit ${user.name}`} onClick={onEdit} sx={{ bgcolor: "#E8F0FE", color: "#2563EB", mr: 1, "&:hover": { bgcolor: "#D6E4FD" } }}>
+        <IconButton
+          aria-label={`Edit ${user.name}`}
+          onClick={onEdit}
+          sx={{
+            bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(37, 99, 235, 0.20)' : '#E8F0FE',
+            color: (t) => t.palette.mode === 'dark' ? '#93C5FD' : '#2563EB',
+            mr: 1,
+            '&:hover': { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(37, 99, 235, 0.32)' : '#D6E4FD' },
+          }}
+        >
           <EditOutlined />
         </IconButton>
       </Tooltip>
       <Tooltip title="Reset password">
-        <IconButton aria-label={`Reset password for ${user.name}`} onClick={onReset} sx={{ bgcolor: "#FEF3C7", color: "#B45309", mr: 1, "&:hover": { bgcolor: "#FDE8A8" } }}>
+        <IconButton
+          aria-label={`Reset password for ${user.name}`}
+          onClick={onReset}
+          sx={{
+            bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(245, 158, 11, 0.20)' : '#FEF3C7',
+            color: (t) => t.palette.mode === 'dark' ? '#FCD34D' : '#B45309',
+            mr: 1,
+            '&:hover': { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(245, 158, 11, 0.32)' : '#FDE8A8' },
+          }}
+        >
           <LockResetOutlined />
         </IconButton>
       </Tooltip>
@@ -108,7 +126,12 @@ function RowActions(props: { user: ManagedUser; isSelf: boolean; onEdit: () => v
             aria-label={`Delete ${user.name}`}
             onClick={onDelete}
             disabled={isSelf}
-            sx={{ bgcolor: "#FDECEC", color: "#DC2626", "&:hover": { bgcolor: "#FBDADA" }, "&.Mui-disabled": { bgcolor: "#F3F4F6" } }}
+            sx={{
+              bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(220, 38, 38, 0.20)' : '#FDECEC',
+              color: (t) => t.palette.mode === 'dark' ? '#FCA5A5' : '#DC2626',
+              '&:hover': { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(220, 38, 38, 0.32)' : '#FBDADA' },
+              '&.Mui-disabled': { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6' },
+            }}
           >
             <DeleteOutlineOutlined />
           </IconButton>

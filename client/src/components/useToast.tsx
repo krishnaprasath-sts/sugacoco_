@@ -105,7 +105,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   borderRadius: '12px',
                   display: 'grid',
                   placeItems: 'center',
-                  bgcolor: ask?.danger ? '#FDECEC' : '#F3ECF7',
+                  bgcolor: (t) => ask?.danger
+                    ? (t.palette.mode === 'dark' ? 'rgba(220, 38, 38, 0.20)' : '#FDECEC')
+                    : (t.palette.mode === 'dark' ? 'rgba(181, 89, 192, 0.20)' : '#F3ECF7'),
                   color: ask?.danger ? 'error.main' : 'primary.main',
                 }}
               >

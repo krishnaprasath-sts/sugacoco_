@@ -9,8 +9,9 @@ import EmptyState from '../../components/EmptyState';
 import ErrorState from '../../components/ErrorState';
 import OrdersTable from '../orders/OrdersTable';
 
-function Section({ title, hint, statuses }: { title: string; hint: string; statuses: Parameters<typeof useOrders>[0]['status'] }) {
-  const [page, setPage] = useUrlPage();
+function Section({ title, hint, statuses, pageKey }: { title: string; hint: string; statuses: Parameters<typeof useOrders>[0]['status']; pageKey: string }) {
+  // Each list keeps its own page number, so paging one does not move the others.
+  const [page, setPage] = useUrlPage(pageKey);
   const [pageSize] = usePageSize();
   const { data, isPending, error, refetch } = useOrders({ status: statuses, page, pageSize });
   return (
@@ -40,9 +41,9 @@ export default function BalancePaymentsPage() {
   return (
     <Stack>
       <PageHeader overline="Payments" title="Balance Payments" subtitle="Record the balance after loading. Gate-in happens only after Accounts approves it." />
-      <Section title="Balance rejected · needs your action" hint="Accounts rejected the balance. Open the order, check the reason, and record the payment again." statuses={['BALANCE_REJECTED']} />
-      <Section title="Loading in progress" hint="Record the balance once Documentation has loaded every container. The order page shows when it is ready." statuses={['DOCUMENTATION_IN_PROGRESS']} />
-      <Section title="With Accounts" hint="Balance recorded, waiting for Accounts to verify." statuses={['AWAITING_BALANCE_VERIFICATION']} />
+      <Section pageKey="rejectedPage" title="Balance rejected · needs your action" hint="Accounts rejected the balance. Open the order, check the reason, and record the payment again." statuses={['BALANCE_REJECTED']} />
+      <Section pageKey="loadingPage" title="Loading in progress" hint="Record the balance once Documentation has loaded every container. The order page shows when it is ready." statuses={['DOCUMENTATION_IN_PROGRESS']} />
+      <Section pageKey="verifyPage" title="With Accounts" hint="Balance recorded, waiting for Accounts to verify." statuses={['AWAITING_BALANCE_VERIFICATION']} />
     </Stack>
   );
 }

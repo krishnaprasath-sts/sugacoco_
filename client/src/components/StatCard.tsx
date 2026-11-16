@@ -29,8 +29,8 @@ export default function StatCard({ label, value, icon, color, to, loading, hint 
         color: '#FFFFFF',
         textAlign: 'left',
         boxShadow: '0 12px 28px rgba(31,16,56,0.12)',
-        transition: 'transform 150ms ease, box-shadow 150ms ease',
-        '&:hover': to ? { transform: 'translateY(-2px)', boxShadow: '0 16px 32px rgba(31,16,56,0.18)' } : undefined,
+        transition: 'transform 240ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 240ms cubic-bezier(0.16, 1, 0.3, 1)',
+        '&:hover': to ? { transform: 'translateY(-3px)', boxShadow: '0 16px 36px rgba(31,16,56,0.22)' } : undefined,
         // Decorative circle, top-right
         '&::after': {
           content: '""',

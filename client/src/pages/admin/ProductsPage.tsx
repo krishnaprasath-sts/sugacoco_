@@ -140,7 +140,12 @@ export default function ProductsPage() {
                       <IconButton
                         aria-label={`Edit ${p.name}`}
                         onClick={() => setDialog({ product: p })}
-                        sx={{ bgcolor: '#E8F0FE', color: '#2563EB', mr: 1, '&:hover': { bgcolor: '#D6E4FD' } }}
+                        sx={{
+                          bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(37, 99, 235, 0.20)' : '#E8F0FE',
+                          color: (t) => t.palette.mode === 'dark' ? '#93C5FD' : '#2563EB',
+                          mr: 1,
+                          '&:hover': { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(37, 99, 235, 0.32)' : '#D6E4FD' },
+                        }}
                       >
                         <EditOutlined />
                       </IconButton>
@@ -151,7 +156,12 @@ export default function ProductsPage() {
                           aria-label={`Delete ${p.name}`}
                           onClick={() => deleteProduct(p)}
                           disabled={p.orderCount > 0 || remove.isPending}
-                          sx={{ bgcolor: '#FDECEC', color: '#DC2626', '&:hover': { bgcolor: '#FBDADA' }, '&.Mui-disabled': { bgcolor: '#F3F4F6' } }}
+                          sx={{
+                            bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(220, 38, 38, 0.20)' : '#FDECEC',
+                            color: (t) => t.palette.mode === 'dark' ? '#FCA5A5' : '#DC2626',
+                            '&:hover': { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(220, 38, 38, 0.32)' : '#FBDADA' },
+                            '&.Mui-disabled': { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6' },
+                          }}
                         >
                           <DeleteOutlineOutlined />
                         </IconButton>

@@ -1,4 +1,4 @@
-import { MenuItem, Pagination, Stack, TextField, Typography } from '@mui/material';
+import { MenuItem, Pagination, Stack, TextField, Typography, useMediaQuery } from '@mui/material';
 import { PAGE_SIZE_OPTIONS, usePageSize } from '../lib/pageSize';
 
 type Props = {
@@ -22,6 +22,7 @@ type Props = {
 /** Lists put one bar on top (entries + count) and one at the bottom (page numbers). Renders nothing for an empty list. */
 export default function ListPagination({ page, pageSize, total, onChange, noun = 'items', inset = false, sizeSelector = true, placement = 'bottom' }: Props) {
   const [, setPageSize] = usePageSize();
+  const touch = useMediaQuery('(pointer: coarse)');
   if (!total) return null;
   const pages = Math.ceil(total / pageSize);
   const from = (page - 1) * pageSize + 1;
@@ -41,6 +42,9 @@ export default function ListPagination({ page, pageSize, total, onChange, noun =
           shape="rounded"
           color="primary"
           size="small"
+          // Touch screens: bigger page buttons, fewer of them so the row still fits a phone.
+          siblingCount={touch ? 0 : 1}
+          sx={touch ? { '& .MuiPaginationItem-root': { minWidth: 40, height: 40, fontSize: 14 } } : undefined}
         />
       </Stack>
     );
