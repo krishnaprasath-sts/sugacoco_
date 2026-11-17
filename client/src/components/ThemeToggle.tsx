@@ -1,6 +1,6 @@
 import { IconButton, Tooltip } from '@mui/material';
 import DarkModeOutlined from '@mui/icons-material/DarkModeOutlined';
-import Lightbulb from '@mui/icons-material/Lightbulb';
+import LightModeOutlined from '@mui/icons-material/LightModeOutlined';
 import { useThemeMode } from '../ThemeContext';
 
 export default function ThemeToggle() {
@@ -29,11 +29,12 @@ export default function ThemeToggle() {
         }}
       >
         {isDark ? (
-          <Lightbulb
+          // Sun: the usual pair of the moon shown in light mode, in the same outline style.
+          <LightModeOutlined
             sx={{
               fontSize: 22,
               color: '#FBBF24',
-              filter: 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.55))',
+              filter: 'drop-shadow(0 0 4px rgba(251, 191, 36, 0.35))',
             }}
           />
         ) : (
