@@ -21,14 +21,21 @@ export const BRAND = {
 export const SIDEBAR_GRADIENT = `linear-gradient(180deg, ${BRAND.sidebarTop} 0%, ${BRAND.sidebarBottom} 100%)`;
 export const ACTIVE_PILL = `linear-gradient(90deg, #8E3FB0 0%, ${BRAND.violet} 100%)`;
 
-/** Gradient fills for dashboard stat cards (white text on all of them passes contrast). */
+/** Gradient fills for dashboard stat cards. White text passes contrast (4.5:1) on every stop, light end included. */
 export const STAT_GRADIENTS = {
-  green: 'linear-gradient(135deg, #3BAA4A 0%, #23893A 100%)',
-  olive: 'linear-gradient(135deg, #9A9A2A 0%, #6E6E1A 100%)',
-  pink: 'linear-gradient(135deg, #E02E7A 0%, #B8175C 100%)',
+  green: 'linear-gradient(135deg, #2A8538 0%, #1F6F2E 100%)',
+  olive: 'linear-gradient(135deg, #76761E 0%, #5C5C14 100%)',
+  pink: 'linear-gradient(135deg, #C8246B 0%, #A3154F 100%)',
   violet: 'linear-gradient(135deg, #8B45E0 0%, #6A28C4 100%)',
-  teal: 'linear-gradient(135deg, #17A79A 0%, #0E7F74 100%)',
+  teal: 'linear-gradient(135deg, #0F7F75 0%, #0B655C 100%)',
 } as const;
+
+/** Dark mode: filled plum for buttons, chips and the current page number (white text on #B559C0 is too faint). */
+const DARK_FILL = '#9D45A9';
+const DARK_FILL_HOVER = '#8A3896';
+
+/** Order-number links: deep plum on light backgrounds, light plum on dark ones. */
+export const ORDER_LINK_COLOR = (t: Theme) => (t.palette.mode === 'dark' ? t.palette.primary.light : t.palette.primary.dark);
 export type StatColor = keyof typeof STAT_GRADIENTS;
 
 /** Phone widths (below MUI's `sm` breakpoint). */
@@ -102,10 +109,12 @@ export function getTheme(mode: ThemeMode = 'light'): Theme {
               {
                 props: { variant: 'contained', color: 'primary' },
                 style: {
+                  ...(isDark ? { backgroundColor: DARK_FILL } : {}),
                   boxShadow: isDark
                     ? '0 4px 14px rgba(181, 89, 192, 0.30)'
                     : '0 8px 20px rgba(107, 33, 112, 0.28)',
                   '&:hover': {
+                    ...(isDark ? { backgroundColor: DARK_FILL_HOVER } : {}),
                     boxShadow: isDark
                       ? '0 6px 18px rgba(181, 89, 192, 0.40)'
                       : '0 10px 26px rgba(107, 33, 112, 0.38)',
@@ -132,6 +141,8 @@ export function getTheme(mode: ThemeMode = 'light'): Theme {
                   '&:active': { transform: 'scale(0.98)' },
                 },
               },
+              // Dark mode: text buttons in the lighter plum so small labels stay readable on cards and dialogs.
+              ...(isDark ? [{ props: { variant: 'text' as const, color: 'primary' as const }, style: { color: BRAND.darkPrimaryLight } }] : []),
             ],
           },
         },
@@ -157,6 +168,15 @@ export function getTheme(mode: ThemeMode = 'light'): Theme {
             boxShadow: cardShadow,
             border: isDark ? `1px solid ${BRAND.darkBorder}` : '1px solid #F0EDF5',
             transition: 'box-shadow 180ms ease, transform 180ms ease, border-color 150ms ease',
+            // Phones: ResponsiveTable draws every row as its own card, so the card around the list steps back.
+            '&:has(> [data-row-cards])': {
+              backgroundColor: 'transparent',
+              boxShadow: 'none',
+              border: 0,
+              borderRadius: 0,
+              overflow: 'visible',
+              '& > .MuiCardContent-root': { paddingLeft: 0, paddingRight: 0, paddingTop: 0 },
+            },
           },
         },
       },
@@ -216,7 +236,7 @@ export function getTheme(mode: ThemeMode = 'light'): Theme {
               whiteSpace: 'normal',
               overflow: 'visible',
             },
-            '&.Mui-focused': { color: isDark ? BRAND.darkPrimary : BRAND.plum },
+            '&.Mui-focused': { color: isDark ? BRAND.darkPrimaryLight : BRAND.plum },
             '&.Mui-error': { color: isDark ? '#F87171' : '#DC2626' },
           },
           asterisk: { color: isDark ? '#F87171' : '#DC2626' },
@@ -339,8 +359,24 @@ export function getTheme(mode: ThemeMode = 'light'): Theme {
             transition: 'background-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease',
             '&.MuiChip-clickable:hover': { transform: 'translateY(-1px)' },
             '&.MuiChip-clickable:active': { transform: 'scale(0.96)' },
+            ...(isDark
+              ? {
+                  '&.MuiChip-filled.MuiChip-colorPrimary': { backgroundColor: DARK_FILL },
+                  '&.MuiChip-filled.MuiChip-colorPrimary.MuiChip-clickable:hover': { backgroundColor: DARK_FILL_HOVER },
+                }
+              : {}),
           },
           sizeSmall: { height: 22, fontSize: '0.72rem' },
+        },
+      },
+      MuiPaginationItem: {
+        styleOverrides: {
+          root: isDark
+            ? {
+                '&.Mui-selected.MuiPaginationItem-colorPrimary': { backgroundColor: DARK_FILL },
+                '&.Mui-selected.MuiPaginationItem-colorPrimary:hover': { backgroundColor: DARK_FILL_HOVER },
+              }
+            : {},
         },
       },
       MuiToggleButton: {
@@ -390,7 +426,13 @@ export function getTheme(mode: ThemeMode = 'light'): Theme {
   });
 }
 
-// Pre-create singleton themes so createTheme is never called on re-render
+// One theme object per mode, so createTheme is never called on re-render.
+// The dark theme is built the first time it is needed, not at start-up for everyone.
 export const LIGHT_THEME = getTheme('light');
-export const DARK_THEME = getTheme('dark');
+let darkTheme: Theme | null = null;
+export function themeFor(mode: ThemeMode): Theme {
+  if (mode === 'light') return LIGHT_THEME;
+  darkTheme ??= getTheme('dark');
+  return darkTheme;
+}
 export const theme = LIGHT_THEME;

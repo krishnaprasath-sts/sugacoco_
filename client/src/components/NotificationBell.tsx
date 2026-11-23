@@ -112,7 +112,7 @@ export default function NotificationBell() {
                       {n.message}
                     </Typography>
                   )}
-                  <Typography sx={{ fontSize: 11.5, color: 'text.disabled', mt: 0.25 }}>{formatDateTime(n.createdAt)}</Typography>
+                  <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mt: 0.25 }}>{formatDateTime(n.createdAt)}</Typography>
                 </Box>
               </Box>
               <IconButton

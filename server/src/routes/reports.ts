@@ -7,7 +7,7 @@ import { pool } from '../db/pool.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { parse } from '../middleware/validate.js';
 import { ORDER_STATUSES, STATUS_LABEL, type OrderStatus } from '../workflow/statuses.js';
-import { RECEIVED_BY_ORDER } from '../services/received.js';
+import { RECEIVED } from '../services/received.js';
 import { AVAILABLE_SQL } from '../services/credit.js';
 
 export const reportsRouter = Router();
@@ -39,13 +39,13 @@ reportsRouter.get('/orders', requirePermission('reports.view'), async (req, res)
   if (q.status.length) where.push(`o.status IN (${q.status.map(() => '?').join(',')})`), params.push(...q.status);
 
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.pi_date AS piDate, c.company_name AS customerName,
+    `SELECT STRAIGHT_JOIN o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.pi_date AS piDate, c.company_name AS customerName,
             o.status, o.currency, o.total_value AS totalValue, o.advance_amount AS advanceAmount, o.balance_amount AS balanceAmount,
             o.credit_applied_amount AS creditApplied,
-            COALESCE(r.received, 0) AS received,
+            ${RECEIVED} AS received,
             u.name AS salesName, o.status_changed_at AS statusChangedAt, o.closed_at AS closedAt
      FROM orders o JOIN customers c ON c.id = o.customer_id JOIN users u ON u.id = o.created_by
-     LEFT JOIN (${RECEIVED_BY_ORDER}) r ON r.order_id = o.id
+     
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY o.pi_date DESC, o.id DESC
      ${q.format !== 'json' ? 'LIMIT 50000' : 'LIMIT ? OFFSET ?'}`,
@@ -102,9 +102,9 @@ reportsRouter.get('/orders', requirePermission('reports.view'), async (req, res)
   const [totals] = await pool.query<RowDataPacket[]>(
     `SELECT o.currency, COUNT(*) AS orders,
             SUM(IF(o.status = 'CANCELLED', 0, o.total_value)) AS totalValue,
-            SUM(IF(o.status = 'CANCELLED', 0, COALESCE(r.received, 0))) AS received,
-            SUM(IF(o.status = 'CANCELLED', 0, o.total_value - o.credit_applied_amount - COALESCE(r.received, 0))) AS outstanding
-     FROM orders o LEFT JOIN (${RECEIVED_BY_ORDER}) r ON r.order_id = o.id
+            SUM(IF(o.status = 'CANCELLED', 0, ${RECEIVED})) AS received,
+            SUM(IF(o.status = 'CANCELLED', 0, o.total_value - o.credit_applied_amount - ${RECEIVED})) AS outstanding
+     FROM orders o 
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      GROUP BY o.currency`,
     params,
@@ -123,20 +123,23 @@ reportsRouter.get('/orders', requirePermission('reports.view'), async (req, res)
 reportsRouter.get('/customers', requirePermission('reports.view'), async (req, res) => {
   const fmt = parse(format, req.query.format);
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT c.id AS customerId, c.company_name AS customerName, o.currency,
-            COUNT(o.id) AS orders,
-            SUM(o.status = 'CLOSED') AS closed,
-            SUM(o.status NOT IN ('CLOSED','CANCELLED')) AS open,
-            SUM(IF(o.status = 'CANCELLED', 0, o.total_value)) AS totalValue,
-            SUM(IF(o.status = 'CANCELLED', 0, o.credit_applied_amount)) AS creditUsed,
-            SUM(IF(o.status = 'CANCELLED', 0, COALESCE(r.received, 0))) AS received,
+    // Totals per customer are added up on the orders table first; names and credit are looked up per result row.
+    `SELECT c.id AS customerId, c.company_name AS customerName, g.currency,
+            g.orders, g.closed, g.open, g.totalValue, g.creditUsed, g.received,
             (SELECT ${AVAILABLE_SQL('cc', true)}
-               FROM customer_credits cc WHERE cc.customer_id = c.id AND cc.currency = o.currency) AS creditAvailable,
+               FROM customer_credits cc WHERE cc.customer_id = c.id AND cc.currency = g.currency) AS creditAvailable,
             (SELECT COALESCE(SUM(cc.amount), 0) FROM customer_credits cc
-               WHERE cc.customer_id = c.id AND cc.currency = o.currency AND cc.status = 'VERIFIED' AND cc.entry_type = 'REFUND') AS refunded
-     FROM customers c JOIN orders o ON o.customer_id = c.id
-     LEFT JOIN (${RECEIVED_BY_ORDER}) r ON r.order_id = o.id
-     GROUP BY c.id, c.company_name, o.currency ORDER BY c.company_name`,
+               WHERE cc.customer_id = c.id AND cc.currency = g.currency AND cc.status = 'VERIFIED' AND cc.entry_type = 'REFUND') AS refunded
+     FROM (SELECT o.customer_id, o.currency,
+                  COUNT(*) AS orders,
+                  SUM(o.status = 'CLOSED') AS closed,
+                  SUM(o.status NOT IN ('CLOSED','CANCELLED')) AS open,
+                  SUM(IF(o.status = 'CANCELLED', 0, o.total_value)) AS totalValue,
+                  SUM(IF(o.status = 'CANCELLED', 0, o.credit_applied_amount)) AS creditUsed,
+                  SUM(IF(o.status = 'CANCELLED', 0, ${RECEIVED})) AS received
+           FROM orders o GROUP BY o.customer_id, o.currency) g
+     JOIN customers c ON c.id = g.customer_id
+     ORDER BY c.company_name`,
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = (rows as Record<string, any>[]).map((r): Record<string, any> => ({
@@ -199,19 +202,21 @@ reportsRouter.get('/sales', requirePermission('reports.view'), async (req, res) 
   const q = parse(groupedQuery, req.query);
   const w = groupedWhere(q);
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT u.id AS salesId, u.name AS salesName, o.currency,
-            COUNT(*) AS orders,
-            COUNT(DISTINCT o.customer_id) AS customers,
-            SUM(o.status <> 'CLOSED') AS open,
-            SUM(o.status = 'CLOSED') AS closed,
-            SUM(o.total_value) AS totalValue,
-            SUM(COALESCE(r.received, 0)) AS received,
-            SUM(o.total_value - o.credit_applied_amount - COALESCE(r.received, 0)) AS outstanding
-     FROM orders o JOIN users u ON u.id = o.created_by
-     LEFT JOIN (${RECEIVED_BY_ORDER}) r ON r.order_id = o.id
-     ${w.sql}
-     GROUP BY u.id, u.name, o.currency
-     ORDER BY o.currency, totalValue DESC`,
+    // Added up on the orders table first, then joined to the few users.
+    `SELECT u.id AS salesId, u.name AS salesName, g.*
+     FROM (SELECT o.created_by, o.currency,
+                  COUNT(*) AS orders,
+                  COUNT(DISTINCT o.customer_id) AS customers,
+                  SUM(o.status <> 'CLOSED') AS open,
+                  SUM(o.status = 'CLOSED') AS closed,
+                  SUM(o.total_value) AS totalValue,
+                  SUM(${RECEIVED}) AS received,
+                  SUM(o.total_value - o.credit_applied_amount - ${RECEIVED}) AS outstanding
+           FROM orders o
+           ${w.sql}
+           GROUP BY o.created_by, o.currency) g
+     JOIN users u ON u.id = g.created_by
+     ORDER BY g.currency, g.totalValue DESC`,
     w.params,
   );
   const data = rows.map((r) => ({
@@ -346,12 +351,14 @@ reportsRouter.get('/audit', requirePermission('audit.view'), async (req, res) =>
   if (q.from) where.push('a.created_at >= ?'), params.push(`${q.from} 00:00:00`);
   if (q.to) where.push('a.created_at <= ?'), params.push(`${q.to} 23:59:59`);
   if (q.action) where.push('a.action = ?'), params.push(q.action);
-  if (q.orderNo) where.push('o.order_no LIKE ?'), params.push(`%${q.orderNo}%`);
+  // Matching orders are found first, then their entries through the audit order index.
+  if (q.orderNo) where.push('a.order_id IN (SELECT so.id FROM orders so WHERE so.order_no LIKE ?)'), params.push(`%${q.orderNo}%`);
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const pageSize = q.pageSize;
-  const [[count]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM audit_logs a LEFT JOIN orders o ON o.id = a.order_id ${whereSql}`, params);
+  const [[count]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM audit_logs a ${whereSql}`, params);
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT a.id, a.action, a.entity_type AS entityType, a.entity_id AS entityId, a.changes, a.ip_address AS ipAddress,
+    // Without an order filter, walk the newest entries first and stop at the page (STRAIGHT_JOIN keeps that plan).
+    `SELECT ${q.orderNo ? '' : 'STRAIGHT_JOIN'} a.id, a.action, a.entity_type AS entityType, a.entity_id AS entityId, a.changes, a.ip_address AS ipAddress,
             a.created_at AS createdAt, u.name AS userName, r.name AS userRole, o.id AS orderId, o.order_no AS orderNo
      FROM audit_logs a
      LEFT JOIN users u ON u.id = a.user_id LEFT JOIN roles r ON r.id = u.role_id

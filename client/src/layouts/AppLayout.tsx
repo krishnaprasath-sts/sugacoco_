@@ -23,6 +23,7 @@ import {
   Typography,
   useMediaQuery,
   useTheme,
+  type Theme,
 } from '@mui/material';
 import HamburgerIcon from '../components/HamburgerIcon';
 import LogoutOutlined from '@mui/icons-material/LogoutOutlined';
@@ -80,30 +81,27 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-/** Live date-time pill in the top bar. */
+// Built once: creating Intl formatters every second was a steady cost on slow phones.
+const CLOCK_DATE = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+const CLOCK_TIME = new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const CLOCK_SX = {
+  px: 2,
+  py: 0.75,
+  borderRadius: 999,
+  bgcolor: (theme: Theme) => (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#F1F0F6'),
+  color: 'text.primary',
+  fontSize: 12.5,
+  whiteSpace: 'nowrap',
+} as const;
+
+/** Live date-time pill in the top bar (desktop only; the parent does not mount it on phones). */
 function Clock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-  const text = `${now.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })} · ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-  return (
-    <Box
-      sx={{
-        display: { xs: 'none', md: 'block' },
-        px: 2,
-        py: 0.75,
-        borderRadius: 999,
-        bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#F1F0F6'),
-        color: 'text.primary',
-        fontSize: 12.5,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {text}
-    </Box>
-  );
+  return <Box sx={CLOCK_SX}>{`${CLOCK_DATE.format(now)} · ${CLOCK_TIME.format(now)}`}</Box>;
 }
 
 export default function AppLayout() {
@@ -311,7 +309,7 @@ export default function AppLayout() {
             <Logo height={36} />
           </Box>
           <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' }, justifyContent: 'center' }}>
-            <Clock />
+            {isDesktop && <Clock />}
           </Box>
 
           <ThemeToggle />
@@ -330,6 +328,8 @@ export default function AppLayout() {
                 width: 38,
                 height: 38,
                 bgcolor: BRAND.plum,
+                // MUI's Avatar takes its text colour from the page background, which is near-black in dark mode.
+                color: '#FFFFFF',
                 fontSize: 14,
                 fontWeight: 700,
                 boxShadow: '0 6px 16px rgba(107,33,112,0.35)',

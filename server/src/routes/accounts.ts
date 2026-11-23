@@ -11,7 +11,7 @@ import { changeStatus, lockOrder } from '../services/workflow.js';
 import { CURRENCIES, round2, toDecimal } from '../lib/money.js';
 import { amount } from '../lib/validation.js';
 import { availableCredit } from '../services/credit.js';
-import { RECEIVED_BY_ORDER } from '../services/received.js';
+import { RECEIVED } from '../services/received.js';
 
 export const accountsRouter = Router();
 accountsRouter.use(requireAuth);
@@ -49,9 +49,8 @@ accountsRouter.get('/final-queue', requirePermission('orders.close'), async (_re
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.currency, o.total_value AS totalValue,
             o.status, o.status_changed_at AS statusChangedAt, c.company_name AS customerName,
-            COALESCE(r.received, 0) AS received
+            ${RECEIVED} AS received
      FROM orders o JOIN customers c ON c.id = o.customer_id
-     LEFT JOIN (${RECEIVED_BY_ORDER}) r ON r.order_id = o.id
      WHERE o.status = 'AWAITING_FINAL_VERIFICATION' ORDER BY o.status_changed_at`,
   );
   res.json({ orders: rows });

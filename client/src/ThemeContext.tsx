@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { flushSync } from 'react-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
-import { LIGHT_THEME, DARK_THEME, type ThemeMode } from './theme';
+import { themeFor, type ThemeMode } from './theme';
 
 interface ThemeContextValue {
   mode: ThemeMode;
@@ -97,8 +97,7 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
       });
   };
 
-  // Instant O(1) theme resolution with zero object allocation
-  const theme = mode === 'dark' ? DARK_THEME : LIGHT_THEME;
+  const theme = themeFor(mode);
 
   return (
     <ThemeContext.Provider value={{ mode, setMode, toggleTheme }}>

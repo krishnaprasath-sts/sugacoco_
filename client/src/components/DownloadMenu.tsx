@@ -7,8 +7,8 @@ import PictureAsPdfOutlined from '@mui/icons-material/PictureAsPdfOutlined';
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined';
 
 const FORMATS = [
-  { key: 'xlsx', label: 'Excel (.xlsx)', icon: <TableViewOutlined fontSize="small" sx={{ color: '#15803D' }} /> },
-  { key: 'pdf', label: 'PDF', icon: <PictureAsPdfOutlined fontSize="small" sx={{ color: '#DC2626' }} /> },
+  { key: 'xlsx', label: 'Excel (.xlsx)', icon: <TableViewOutlined fontSize="small" sx={{ color: 'success.main' }} /> },
+  { key: 'pdf', label: 'PDF', icon: <PictureAsPdfOutlined fontSize="small" sx={{ color: 'error.main' }} /> },
   { key: 'csv', label: 'CSV', icon: <DescriptionOutlined fontSize="small" /> },
 ] as const;
 

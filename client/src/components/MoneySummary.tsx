@@ -33,8 +33,9 @@ export default function MoneySummary({ pendingLink }: { pendingLink?: string }) 
   ];
   return (
     <Grid container spacing={2.5} sx={{ mb: 3 }}>
-      {tiles.map((t) => (
-        <Grid key={t.label} size={{ xs: 12, sm: 6, lg: 'grow' }}>
+      {/* Phones: two tiles per row (the last one full width) so the queue starts within the first screen. */}
+      {tiles.map((t, i) => (
+        <Grid key={t.label} size={{ xs: i === tiles.length - 1 ? 12 : 6, sm: 6, lg: 'grow' }}>
           <StatCard {...t} loading={isPending} />
         </Grid>
       ))}

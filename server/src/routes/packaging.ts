@@ -110,23 +110,30 @@ const sentQuery = z.object({
 packagingRouter.get('/sent', async (req, res) => {
   const { page, pageSize, q } = parse(sentQuery, req.query);
   const marks = PACKAGING_WORKING.map(() => '?').join(',');
-  const where = q ? 'WHERE (o.order_no LIKE ? OR o.pi_number LIKE ? OR c.company_name LIKE ?)' : '';
+  // Search: find the matching order ids first (each test runs on one table), then keep the hand-overs of those orders.
+  const where = q
+    ? `WHERE s.order_id IN (
+         SELECT o.id FROM orders o WHERE o.order_no LIKE ? OR o.pi_number LIKE ?
+           OR o.customer_id IN (SELECT cs.id FROM customers cs WHERE cs.company_name LIKE ?))`
+    : '';
   const like = q ? Array(3).fill(`%${q.replace(/[\\%_]/g, '\\$&')}%`) : [];
-  const from = `FROM orders o JOIN customers c ON c.id = o.customer_id
-    JOIN (SELECT order_id, MAX(changed_at) AS sentAt FROM order_status_history
-          WHERE from_status IN (${marks}) AND to_status = 'READY_FOR_DOCUMENTATION' GROUP BY order_id) s ON s.order_id = o.id
+  // When each order was handed over comes from the history index alone.
+  const from = `FROM (SELECT order_id, MAX(changed_at) AS sentAt FROM order_status_history
+          WHERE from_status IN (${marks}) AND to_status = 'READY_FOR_DOCUMENTATION' GROUP BY order_id) s
     ${where}`;
+  // Pick the page first, then work out products / packed quantity / files for those rows only.
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.status, o.status_changed_at AS statusChangedAt,
-            c.company_name AS customerName, s.sentAt,
+            c.company_name AS customerName, pg.sentAt,
             (SELECT GROUP_CONCAT(CONCAT(i.product_name, ' (', TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM i.quantity)), ' ', i.unit, ')')
                                  ORDER BY i.sort_order SEPARATOR ', ') FROM order_items i WHERE i.order_id = o.id) AS products,
             (SELECT p.quantity_packed FROM packaging_updates p WHERE p.order_id = o.id ORDER BY p.id DESC LIMIT 1) AS quantityPacked,
             (SELECT p.quantity_unit FROM packaging_updates p WHERE p.order_id = o.id ORDER BY p.id DESC LIMIT 1) AS quantityUnit,
             (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id AND d.deleted_at IS NULL
                AND d.category IN ('PACKAGING_IMAGE','PACKAGING_DOC')) AS mediaCount
-     ${from}
-     ORDER BY s.sentAt DESC, o.id DESC LIMIT ? OFFSET ?`,
+     FROM (SELECT s.order_id, s.sentAt ${from} ORDER BY s.sentAt DESC, s.order_id DESC LIMIT ? OFFSET ?) pg
+     JOIN orders o ON o.id = pg.order_id JOIN customers c ON c.id = o.customer_id
+     ORDER BY pg.sentAt DESC, o.id DESC`,
     [...PACKAGING_WORKING, ...like, pageSize, (page - 1) * pageSize],
   );
   const [[{ total }]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total ${from}`, [...PACKAGING_WORKING, ...like]);

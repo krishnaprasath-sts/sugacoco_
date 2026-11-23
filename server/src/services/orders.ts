@@ -171,6 +171,14 @@ export async function getOrderDetail(id: number, user: AuthUser) {
       : null;
 
   const docsStage = DOCS_EDITABLE.includes(order.status);
+  // Once every container is loaded, Documentation is done for now: Sales records the balance
+  // (or Accounts confirms there is none) before gate-in can start.
+  const waitingOn =
+    order.status === 'DOCUMENTATION_IN_PROGRESS' && allLoaded
+      ? Number(order.balanceAmount) === 0
+        ? 'payments.verify'
+        : 'payments.record'
+      : STATUS_PERMISSION[order.status];
   return {
     order: user.canViewPricing ? order : stripPricing(order, FINANCIAL_ORDER_FIELDS),
     customer,
@@ -206,7 +214,7 @@ export async function getOrderDetail(id: number, user: AuthUser) {
       canCancel: can(user, 'orders.cancel') && !locked,
       canManageTracking: can(user, 'tracking.manage'),
       /** The current stage waits on someone with this user's permissions. */
-      yourTurn: !!STATUS_PERMISSION[order.status] && can(user, STATUS_PERMISSION[order.status]!),
+      yourTurn: !!waitingOn && can(user, waitingOn),
       confirmNoPaymentType:
         !can(user, 'payments.verify')
           ? null

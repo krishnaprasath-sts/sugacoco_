@@ -1,4 +1,5 @@
 import { useUrlPage } from '../../lib/useUrlState';
+import { usePaged } from '../../lib/usePaged';
 import { useState, type FormEvent } from 'react';
 import { Link as RouterLink } from 'react-router';
 import {
@@ -197,6 +198,8 @@ export default function CreditsPage() {
   const { data, isPending, error, refetch } = useCredits(page, pageSize);
   const [adding, setAdding] = useState(false);
   const pending = data?.pending ?? [];
+  // Every customer with a balance comes back at once; show them a page at a time (own URL key, so the entries list keeps ?page).
+  const balances = usePaged(data?.balances, undefined, null, 'balancesPage');
 
   return (
     <Box>
@@ -216,6 +219,7 @@ export default function CreditsPage() {
       )}
 
       <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>Customer balances</Typography>
+      <ListPagination page={balances.page} pageSize={balances.pageSize} total={balances.total} onChange={balances.setPage} noun="customers" placement="top" />
       <Card sx={{ mb: 4 }}>
         {isPending ? <Skeleton height={120} /> : !data?.balances.length ? (
           <EmptyState title="No withheld amounts or refunds yet" />
@@ -223,7 +227,7 @@ export default function CreditsPage() {
           <ResponsiveTable
             ariaLabel="Customer balances"
             minWidth={640}
-            rows={data.balances}
+            rows={balances.pageItems}
             rowKey={(b) => `${b.customerId}-${b.currency}`}
             columns={[
               { label: 'Customer', mobile: 'title', cellSx: { fontWeight: 600 }, render: (b) => b.customerName },
@@ -234,6 +238,7 @@ export default function CreditsPage() {
             ]}
           />
         )}
+        <ListPagination page={balances.page} pageSize={balances.pageSize} total={balances.total} onChange={balances.setPage} noun="customers" inset />
       </Card>
 
       <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>All entries</Typography>

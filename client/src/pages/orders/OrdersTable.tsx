@@ -17,6 +17,7 @@ import {
 import type { OrderListRow } from '../../api/orders';
 import { formatDate, formatDateTime, formatMoney } from '../../lib/format';
 import StatusChip from '../../components/StatusChip';
+import { ORDER_LINK_COLOR } from '../../theme';
 
 type Props = { orders: OrderListRow[]; loading?: boolean; showValue?: boolean; showOwner?: boolean };
 
@@ -85,7 +86,7 @@ export default function OrdersTable({ orders, loading, showValue = true, showOwn
                     component={RouterLink}
                     to={`/orders/${o.id}`}
                     onClick={(e) => e.stopPropagation()}
-                    sx={{ fontWeight: 600, fontSize: 14, color: 'primary.dark', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                    sx={{ fontWeight: 600, fontSize: 14, color: ORDER_LINK_COLOR, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
                   >
                     {o.orderNo}
                   </Typography>

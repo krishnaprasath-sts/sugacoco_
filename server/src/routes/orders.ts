@@ -158,7 +158,8 @@ ordersRouter.get('/', async (req, res) => {
   const where: string[] = [];
   const params: unknown[] = [];
   if (q) {
-    where.push('(o.order_no LIKE ? OR o.pi_number LIKE ? OR c.company_name LIKE ?)');
+    // Customer names are matched once in the (small) customers table, so the orders scan stays on one index.
+    where.push('(o.order_no LIKE ? OR o.pi_number LIKE ? OR o.customer_id IN (SELECT cs.id FROM customers cs WHERE cs.company_name LIKE ?))');
     params.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
   if (status.length) {
@@ -174,17 +175,19 @@ ordersRouter.get('/', async (req, res) => {
     params.push(customerId);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const from = 'FROM orders o JOIN customers c ON c.id = o.customer_id JOIN users u ON u.id = o.created_by';
 
-  const [[count]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total ${from} ${whereSql}`, params);
+  // Every order has a customer and a creator, so the count needs only the orders table.
+  const [[count]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM orders o ${whereSql}`, params);
+  // Find the page's ids on the orders indexes first, then load names for just those rows.
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.pi_date AS piDate, o.currency,
             o.total_value AS totalValue, o.status, o.status_changed_at AS statusChangedAt,
             o.qc_status AS qcStatus, o.packaging_status AS packagingStatus, o.expected_ready_date AS expectedReadyDate,
             c.id AS customerId, c.company_name AS customerName, u.name AS createdByName, o.created_at AS createdAt
-     ${from} ${whereSql}
-     ORDER BY o.status_changed_at DESC, o.id DESC
-     LIMIT ? OFFSET ?`,
+     FROM (SELECT o.id FROM orders o ${whereSql} ORDER BY o.status_changed_at DESC, o.id DESC LIMIT ? OFFSET ?) pg
+     JOIN orders o ON o.id = pg.id
+     JOIN customers c ON c.id = o.customer_id JOIN users u ON u.id = o.created_by
+     ORDER BY o.status_changed_at DESC, o.id DESC`,
     [...params, pageSize, (page - 1) * pageSize],
   );
   const orders = req.user!.canViewPricing ? rows : rows.map((r) => stripPricing(r, ['totalValue']));

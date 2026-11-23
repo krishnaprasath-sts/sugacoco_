@@ -1,11 +1,7 @@
 /**
  * Money received per order = the bank amount Accounts confirmed when approving
  * (falls back to the reported amount for approvals recorded before amountReceived was required).
- * Use as a derived table: LEFT JOIN (${RECEIVED_BY_ORDER}) r ON r.order_id = o.id
+ * Stored on the order as orders.received_amount (migration 010) and added to when Accounts approves
+ * a payment (routes/payments.ts), so no query has to sum the payments table.
  */
-export const RECEIVED_BY_ORDER = `
-  SELECT p.order_id, SUM(COALESCE(v.amount_received, p.amount)) AS received
-  FROM payments p
-  LEFT JOIN payment_verifications v ON v.payment_id = p.id AND v.decision = 'APPROVED'
-  WHERE p.status = 'APPROVED'
-  GROUP BY p.order_id`;
+export const RECEIVED = 'o.received_amount';
