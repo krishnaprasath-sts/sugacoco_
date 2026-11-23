@@ -15,6 +15,8 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         // Long-lived vendor chunks: cached by the browser across app updates.
+        // MUI stays in one chunk on purpose: splitting it per page was measured slower on phones
+        // (35–45 requests instead of ~24, and a longer download waterfall).
         advancedChunks: {
           groups: [
             { name: 'react', test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/ },

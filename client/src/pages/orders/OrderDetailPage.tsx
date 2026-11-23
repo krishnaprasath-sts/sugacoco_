@@ -24,7 +24,7 @@ import PaymentsOutlined from '@mui/icons-material/PaymentsOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import { useOrder, type OrderDetail, type Payment } from '../../api/orders';
 import { useMe } from '../../auth/useAuth';
-import { can, DEPARTMENT_LABEL } from '../../auth/roles';
+import { can, DEPARTMENT_LABEL, type Department } from '../../auth/roles';
 import { homePath, ordersListFor } from '../../nav/navConfig';
 import { STATUS, PACKAGING_STATUS_LABEL, QC_STATUS_LABEL, isLocked } from '../../workflow/statuses';
 import { formatDate, formatDateTime, formatMoney } from '../../lib/format';
@@ -58,6 +58,64 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
       </Typography>
     </Stack>
   );
+}
+
+/** Every container has a loading date: Documentation's part is done until the balance is in. */
+const allLoaded = (d: OrderDetail) => d.containers.length > 0 && d.containers.every((c) => c.loadingDate);
+/** Waiting on Sales for the balance (or on Accounts when no balance is due) although Documentation owns the stage. */
+const balanceHandoff = (d: OrderDetail) => d.order.status === 'DOCUMENTATION_IN_PROGRESS' && allLoaded(d);
+
+/** Which department acts next. */
+function waitingOn(d: OrderDetail): Department {
+  if (balanceHandoff(d)) return d.order.balanceAmount !== undefined && Number(d.order.balanceAmount) === 0 ? 'ACCOUNTS' : 'SALES';
+  return STATUS[d.order.status].owner!;
+}
+
+/** Shown to people who are waiting on another department, when the stage name alone does not say why. */
+function handoffNote(d: OrderDetail): string | null {
+  if (balanceHandoff(d)) return 'All containers are loaded. Gate-in opens once the balance payment is approved.';
+  if (d.order.status === 'DOCUMENTATION_IN_PROGRESS') return 'Documentation is booking and loading the containers.';
+  return null;
+}
+
+/** What the person whose turn it is should do next, in plain words. */
+function nextStep(d: OrderDetail): string | null {
+  const { order, permissions: p } = d;
+  switch (order.status) {
+    case 'AWAITING_ADVANCE_VERIFICATION':
+      return p.confirmNoPaymentType === 'ADVANCE' ? 'No advance is due. Confirm it to send the order to QC.' : 'Check the advance in the bank, then approve or reject it.';
+    case 'AWAITING_QC':
+      return 'Start QC: record the sourcing and quality status.';
+    case 'QC_IN_PROGRESS':
+    case 'WAITING_FOR_MATERIALS':
+    case 'AWAITING_QUALITY_CHECK':
+      return 'Update QC progress. Mark it Ready once materials are sourced and quality has passed.';
+    case 'AWAITING_PACKAGING':
+      return 'Start packaging and record the start date.';
+    case 'PACKAGING_IN_PROGRESS':
+    case 'PACKAGING_ON_HOLD':
+    case 'PACKAGING_ISSUE':
+      return 'Update packaging progress. Mark it Completed with the packed quantity when done.';
+    case 'READY_FOR_DOCUMENTATION':
+      return 'Add the container booking. Add the loading date once the container is loaded.';
+    case 'DOCUMENTATION_IN_PROGRESS':
+      if (p.canRecordBalance) return 'All containers are loaded. Record the balance payment.';
+      if (p.confirmNoPaymentType === 'BALANCE') return 'All containers are loaded and no balance is due. Confirm it so gate-in can start.';
+      return 'Add the loading date for every container (edit a container to add it). Sales records the balance once all are loaded.';
+    case 'AWAITING_BALANCE_VERIFICATION':
+      return 'Check the balance payment in the bank, then approve or reject it.';
+    case 'AWAITING_DOCUMENT_RELEASE': {
+      const gated = d.containers.length > 0 && d.containers.every((c) => c.gateInDate);
+      const released = d.billReleases.some((b) => b.releaseStatus === 'RELEASED');
+      if (gated && released) return 'Gate-in and document release are recorded. Mark documentation complete.';
+      if (gated) return 'Gate-in is recorded. Record the document release, then mark documentation complete.';
+      return 'Add the gate-in date for each container, record the document release, then mark documentation complete.';
+    }
+    case 'AWAITING_FINAL_VERIFICATION':
+      return 'Go through the checklist, then verify and close the order.';
+    default:
+      return null;
+  }
 }
 
 const PAYMENT_CHIP: Record<Payment['status'], { label: string; color: 'warning' | 'success' | 'error' }> = {
@@ -184,9 +242,26 @@ export default function OrderDetailPage() {
       ) : (
         !locked &&
         status.owner && (
-          <Alert severity={status.color === 'error' ? 'error' : 'info'} sx={{ mb: 2 }}>
-            {permissions.yourTurn ? 'Waiting for your action. ' : `Waiting for ${DEPARTMENT_LABEL[status.owner]}. `}
-            Current stage: {status.label}.
+          <Alert
+            severity={status.color === 'error' ? 'error' : 'info'}
+            sx={{ mb: 2 }}
+            action={
+              permissions.canRecordBalance ? (
+                <Button color="inherit" size="small" onClick={() => setRecording('BALANCE')} sx={{ whiteSpace: 'nowrap' }}>
+                  Record balance
+                </Button>
+              ) : undefined
+            }
+          >
+            {permissions.yourTurn ? (
+              <>
+                <strong>Your turn.</strong> {nextStep(data) ?? `Current stage: ${status.label}.`}
+              </>
+            ) : (
+              <>
+                Waiting for {DEPARTMENT_LABEL[waitingOn(data)]}. {handoffNote(data) ?? `Current stage: ${status.label}.`}
+              </>
+            )}
           </Alert>
         )
       )}

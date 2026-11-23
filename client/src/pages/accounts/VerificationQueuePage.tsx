@@ -25,6 +25,7 @@ import ListPagination from '../../components/ListPagination';
 import { usePaged } from '../../lib/usePaged';
 import EmptyState from '../../components/EmptyState';
 import ErrorState from '../../components/ErrorState';
+import { ORDER_LINK_COLOR } from '../../theme';
 
 const TABS = ['ready', 'waiting', 'recent'] as const;
 type TabKey = (typeof TABS)[number];
@@ -217,7 +218,7 @@ export default function VerificationQueuePage() {
                       <Typography
                         component={RouterLink}
                         to={`/orders/${v.orderId}`}
-                        sx={{ fontWeight: 700, color: 'primary.dark', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                        sx={{ fontWeight: 700, color: ORDER_LINK_COLOR, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
                       >
                         {v.orderNo}
                       </Typography>

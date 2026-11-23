@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +35,8 @@ export function createApp() {
   // Webuzo runs Node behind Apache/Nginx; needed for correct client IP (rate limit) and secure cookies.
   app.set('trust proxy', 1);
   app.use(helmet());
+  // Gzip API responses and the built app (queues and reports are large JSON; JS/CSS shrink about 70%).
+  app.use(compression());
   app.use(cors({ origin: env.clientOrigin, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
@@ -77,8 +80,17 @@ export function createApp() {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const clientDist = path.resolve(here, '../../client/dist');
   if (isProd && fs.existsSync(clientDist)) {
-    app.use(express.static(clientDist));
-    app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+    // Built files under /assets have a content hash in their name: the browser may keep them for a year.
+    // index.html is always re-checked so a new release is picked up straight away.
+    app.use(
+      '/assets',
+      express.static(path.join(clientDist, 'assets'), { immutable: true, maxAge: '1y', fallthrough: false }),
+    );
+    app.use(express.static(clientDist, { index: false, maxAge: '1h' }));
+    app.get(/^(?!\/api).*/, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(path.join(clientDist, 'index.html'));
+    });
   }
 
   app.use(errorHandler);

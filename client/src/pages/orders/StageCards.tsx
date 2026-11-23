@@ -328,12 +328,12 @@ export function ContainersCard({ detail }: { detail: OrderDetail }) {
   if (!containers.length && !permissions.canEditContainers) return null;
 
   return (
-    <Card>
+    <Card id="containers" sx={{ scrollMarginTop: 80 }}>
       <CardContent>
-        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5, gap: 1 }}>
           <Typography variant="subtitle1">Containers & loading ({containers.length})</Typography>
           {bookingOpen && (
-            <Button startIcon={<AddOutlined />} onClick={() => setEditing('new')}>Add container</Button>
+            <Button startIcon={<AddOutlined />} onClick={() => setEditing('new')} sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Add container</Button>
           )}
         </Stack>
         {!containers.length && <Typography sx={{ color: 'text.secondary' }}>No container booked yet.</Typography>}
@@ -371,6 +371,17 @@ export function ContainersCard({ detail }: { detail: OrderDetail }) {
               </Typography>
               {c.transportDetails && <Typography variant="body2" sx={{ mt: 0.5 }}>{c.transportDetails}</Typography>}
               {c.remarks && <Typography variant="body2" sx={{ mt: 0.5 }}>Remarks: {c.remarks}</Typography>}
+              {/* The next thing to fill in for this container, as a button instead of only the edit icon. */}
+              {bookingOpen && !c.loadingDate && (
+                <Button size="small" variant="outlined" startIcon={<EditOutlined />} onClick={() => setEditing(c)} sx={{ mt: 1.25 }}>
+                  Add loading date
+                </Button>
+              )}
+              {permissions.canGateIn && !c.gateInDate && (
+                <Button size="small" variant="contained" startIcon={<EditOutlined />} onClick={() => setEditing(c)} sx={{ mt: 1.25 }}>
+                  Add gate-in date
+                </Button>
+              )}
             </Box>
           ))}
         </Stack>
@@ -503,6 +514,15 @@ export function BillReleaseCard({ detail }: { detail: OrderDetail }) {
             </Button>
             <Stack spacing={0.5} sx={{ mt: 2 }}>
               <CheckRow ok={allGated} label="All containers loaded with gate-in date" />
+              {!allGated && (
+                <Button
+                  size="small"
+                  onClick={() => document.getElementById('containers')?.scrollIntoView({ behavior: 'smooth' })}
+                  sx={{ alignSelf: 'flex-start', ml: 3, minHeight: 30 }}
+                >
+                  Add gate-in dates in Containers
+                </Button>
+              )}
               <CheckRow ok={released} label="At least one document released" />
             </Stack>
             <Button variant="contained" fullWidth sx={{ mt: 2 }} disabled={!allGated || !released} onClick={() => setConfirm(true)}>

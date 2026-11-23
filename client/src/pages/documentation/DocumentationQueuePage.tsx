@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router';
-import { Alert, Box, Card, Grid, Skeleton, Stack, Tab, Tabs } from '@mui/material';
+import { Alert, Box, Card, Chip, Grid, Skeleton, Stack, Tab, Tabs } from '@mui/material';
 import PlaylistAddOutlined from '@mui/icons-material/PlaylistAddOutlined';
 import LocalShippingOutlined from '@mui/icons-material/LocalShippingOutlined';
 import AccountBalanceOutlined from '@mui/icons-material/AccountBalanceOutlined';
@@ -72,14 +72,22 @@ export default function DocumentationQueuePage({ defaultTab = 'start' }: { defau
             <EmptyState icon={<LocalShippingOutlined />} title={group.empty} />
           </Card>
         )}
-        {tabPaged.pageItems.map((r) => (
-          <StageOrderCard
-            key={r.id}
-            row={r}
-            meta={meta(r)}
-            action={{ label: tab === 'start' ? 'Book container' : tab === 'balance' ? 'View' : 'Open', primary: tab !== 'balance' }}
-          />
-        ))}
+        {tabPaged.pageItems.map((r) => {
+          // Every container loaded: nothing left for Documentation until Sales records the balance.
+          const waitingForSales = r.status === 'DOCUMENTATION_IN_PROGRESS' && (r.containerCount ?? 0) > 0 && r.loadedCount === r.containerCount;
+          return (
+            <StageOrderCard
+              key={r.id}
+              row={r}
+              meta={meta(r)}
+              chips={waitingForSales ? <Chip size="small" variant="outlined" label="Loaded · waiting for balance" /> : undefined}
+              action={{
+                label: tab === 'start' ? 'Book container' : tab === 'balance' || waitingForSales ? 'View' : 'Open',
+                primary: tab !== 'balance' && !waitingForSales,
+              }}
+            />
+          );
+        })}
         <ListPagination page={tabPaged.page} pageSize={tabPaged.pageSize} total={tabPaged.total} onChange={tabPaged.setPage} noun="orders" />
       </Stack>
     </Box>

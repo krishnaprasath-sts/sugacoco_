@@ -25,7 +25,7 @@ export function DonutChart({ data, loading, centerLabel = 'Total' }: { data: Sli
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ alignItems: 'center' }}>
       <Box sx={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={data.map((d) => `${d.label}: ${d.value}`).join(', ')}>
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#F1F0F6" strokeWidth={stroke} />
+          <Box component="circle" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} sx={{ stroke: (t) => (t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#F1F0F6') }} />
           {total > 0 &&
             data.map((d, i) => {
               const len = (d.value / total) * C;
@@ -93,7 +93,7 @@ export function DonutChart({ data, loading, centerLabel = 'Total' }: { data: Sli
 export type Bar = { label: string; value: number; display?: string; hint?: string };
 
 /** Horizontal single-series bars, value labelled at the end. Hover shows the hint. */
-export function BarList({ data, loading, color = '#6B2170' }: { data: Bar[]; loading?: boolean; color?: string }) {
+export function BarList({ data, loading, color = 'primary.main' }: { data: Bar[]; loading?: boolean; color?: string }) {
   const max = Math.max(1, ...data.map((d) => d.value));
   if (loading) return <Stack spacing={1.5}>{data.map((d) => <Skeleton key={d.label} height={28} />)}</Stack>;
   return (

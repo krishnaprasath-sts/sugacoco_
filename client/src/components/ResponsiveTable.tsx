@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router';
 import {
   Box,
+  Card,
   Skeleton,
   Stack,
   Table,
@@ -17,6 +18,7 @@ import {
   useTheme,
   type SxProps,
 } from '@mui/material';
+import { ORDER_LINK_COLOR } from '../theme';
 
 /** Order number link with the PI number under it. Used in most order tables. */
 export function OrderLink({ id, no, pi, link = true }: { id: number; no: ReactNode; pi?: ReactNode; link?: boolean }) {
@@ -26,7 +28,7 @@ export function OrderLink({ id, no, pi, link = true }: { id: number; no: ReactNo
         component={link ? RouterLink : 'span'}
         to={`/orders/${id}`}
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
-        sx={{ fontWeight: 600, fontSize: 14, color: link ? 'primary.dark' : 'text.primary', whiteSpace: 'nowrap' }}
+        sx={{ fontWeight: 600, fontSize: 14, color: link ? ORDER_LINK_COLOR : 'text.primary', whiteSpace: 'nowrap' }}
       >
         {no}
       </Typography>
@@ -73,25 +75,29 @@ export default function ResponsiveTable<T>({ columns, rows, rowKey, loading, min
     const pick = (m: Column<T>['mobile']) => columns.filter((c) => (c.mobile ?? 'field') === m);
     const [titles, ends, subs, fields, fulls] = [pick('title'), pick('end'), pick('sub'), pick('field'), pick('full')];
     return (
-      <Box role="list" aria-label={ariaLabel}>
+      // Each row is its own card with a gap between them. `data-row-cards` tells the card
+      // around this list (see MuiCard in theme.ts) to drop its own background and border.
+      <Box
+        role="list"
+        aria-label={ariaLabel}
+        data-row-cards={loading || rows.length > 0 ? '' : undefined}
+        sx={{ display: 'grid', gap: 1.5, '* + &': { mt: 1.5 } }}
+      >
         {loading &&
           Array.from({ length: 3 }).map((_, i) => (
-            <Box key={i} sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Card key={i} sx={{ p: 2 }}>
               <Skeleton width="50%" />
               <Skeleton width="80%" />
-            </Box>
+            </Card>
           ))}
         {rows.map((row) => (
-          <Box
+          <Card
             key={rowKey(row)}
             role="listitem"
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             sx={{
               px: 2,
               py: 1.75,
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              '&:last-of-type': { borderBottom: 0 },
               cursor: onRowClick ? 'pointer' : undefined,
               transition: 'background-color 180ms ease',
               '&:hover': onRowClick ? { bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#FAF7FC' } : undefined,
@@ -129,7 +135,7 @@ export default function ResponsiveTable<T>({ columns, rows, rowKey, loading, min
                 <Box sx={{ fontSize: 13.5, wordBreak: 'break-word' }}>{c.render(row)}</Box>
               </Box>
             ))}
-          </Box>
+          </Card>
         ))}
       </Box>
     );

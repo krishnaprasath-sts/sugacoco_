@@ -45,17 +45,13 @@ summaryRouter.get('/money', async (_req, res) => {
   // Still to collect on open orders = total − credit used − received. Split by where the order is.
   const [[due]] = await pool.query<RowDataPacket[]>(
     `SELECT
-       COALESCE(SUM(GREATEST(o.total_value - o.credit_applied_amount - COALESCE(r.received, 0), 0)), 0) AS outstanding,
-       COUNT(CASE WHEN o.total_value - o.credit_applied_amount - COALESCE(r.received, 0) > 0.005 THEN 1 END) AS outstandingOrders,
+       COALESCE(SUM(GREATEST(o.total_value - o.credit_applied_amount - o.received_amount, 0)), 0) AS outstanding,
+       COUNT(CASE WHEN o.total_value - o.credit_applied_amount - o.received_amount > 0.005 THEN 1 END) AS outstandingOrders,
        COALESCE(SUM(CASE WHEN o.status IN ('DOCUMENTATION_IN_PROGRESS','AWAITING_BALANCE_VERIFICATION','BALANCE_REJECTED')
-                         THEN GREATEST(o.total_value - o.credit_applied_amount - COALESCE(r.received, 0), 0) END), 0) AS balanceDue,
+                         THEN GREATEST(o.total_value - o.credit_applied_amount - o.received_amount, 0) END), 0) AS balanceDue,
        COUNT(CASE WHEN o.status IN ('DOCUMENTATION_IN_PROGRESS','AWAITING_BALANCE_VERIFICATION','BALANCE_REJECTED')
-                   AND o.total_value - o.credit_applied_amount - COALESCE(r.received, 0) > 0.005 THEN 1 END) AS balanceDueOrders
+                   AND o.total_value - o.credit_applied_amount - o.received_amount > 0.005 THEN 1 END) AS balanceDueOrders
      FROM orders o
-     LEFT JOIN (SELECT p.order_id, SUM(COALESCE(v.amount_received, p.amount)) AS received
-                FROM payments p
-                LEFT JOIN payment_verifications v ON v.payment_id = p.id AND v.decision = 'APPROVED'
-                WHERE p.status = 'APPROVED' GROUP BY p.order_id) r ON r.order_id = o.id
      WHERE o.status NOT IN ('CANCELLED','CLOSED')`,
   );
 

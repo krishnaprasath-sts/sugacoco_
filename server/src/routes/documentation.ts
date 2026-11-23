@@ -12,6 +12,7 @@ import { HttpError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import { audit, diff } from '../services/audit.js';
 import { changeStatus, lockOrder } from '../services/workflow.js';
+import { notifyBalanceDue } from '../services/notify.js';
 import { ordersInStatuses } from '../services/queue.js';
 import type { OrderStatus } from '../workflow/statuses.js';
 import { optionalDate } from '../lib/validation.js';
@@ -87,6 +88,15 @@ function checkContainer(body: ContainerInput, status: OrderStatus) {
 const LOADING_STAGES: OrderStatus[] = ['READY_FOR_DOCUMENTATION', 'DOCUMENTATION_IN_PROGRESS'];
 const LATE_EDITABLE: (keyof ContainerInput)[] = ['gateInDate', 'transportDetails', 'remarks'];
 
+/** True when the order has containers and every one of them has a loading date. */
+async function allContainersLoaded(conn: PoolConnection, orderId: number) {
+  const [[r]] = await conn.query<RowDataPacket[]>(
+    'SELECT COUNT(*) AS n, SUM(loading_date IS NOT NULL) AS loaded FROM container_bookings WHERE order_id = ?',
+    [orderId],
+  );
+  return Number(r.n) > 0 && Number(r.n) === Number(r.loaded);
+}
+
 async function lockEditable(conn: PoolConnection, orderId: number) {
   const { status } = await lockOrder(conn, orderId);
   if (!DOCS_EDITABLE.includes(status)) throw new HttpError(409, 'This order is not at the Documentation stage');
@@ -104,6 +114,7 @@ documentationRouter.post('/orders/:id/containers', async (req, res) => {
       throw new HttpError(409, 'Containers can be added only before the balance payment is recorded');
     }
     checkContainer(body, status);
+    const loadedBefore = await allContainersLoaded(conn, orderId);
     const keys = Object.keys(COLS) as (keyof ContainerInput)[];
     const [r] = await conn.query<ResultSetHeader>(
       `INSERT INTO container_bookings (order_id, ${keys.map((k) => COLS[k]).join(', ')}, created_by)
@@ -112,6 +123,7 @@ documentationRouter.post('/orders/:id/containers', async (req, res) => {
     );
     await audit(req, { action: 'CONTAINER_ADDED', entityType: 'container', entityId: r.insertId, orderId, changes: body }, conn);
     if (status === 'READY_FOR_DOCUMENTATION') await changeStatus(conn, req, orderId, 'DOCUMENTATION_IN_PROGRESS', 'Container booking started');
+    if (!loadedBefore && (await allContainersLoaded(conn, orderId))) await notifyBalanceDue(conn, req.user!.id, orderId);
   });
   res.status(201).json({ ok: true });
 });
@@ -137,12 +149,16 @@ documentationRouter.patch('/containers/:cid', async (req, res) => {
       }
     }
     checkContainer(body, status);
+    const loadedBefore = await allContainersLoaded(conn, existing.orderId);
     await conn.query(`UPDATE container_bookings SET ${keys.map((k) => `${COLS[k]} = ?`).join(', ')}, updated_by = ? WHERE id = ?`, [
       ...keys.map((k) => body[k]),
       req.user!.id,
       cid,
     ]);
     await audit(req, { action: 'CONTAINER_UPDATED', entityType: 'container', entityId: cid, orderId: existing.orderId, changes: diff(existing, body) }, conn);
+    if (status === 'DOCUMENTATION_IN_PROGRESS' && !loadedBefore && (await allContainersLoaded(conn, existing.orderId))) {
+      await notifyBalanceDue(conn, req.user!.id, existing.orderId);
+    }
   });
   res.json({ ok: true });
 });
@@ -155,8 +171,13 @@ documentationRouter.delete('/containers/:cid', async (req, res) => {
     const status = await lockEditable(conn, c.order_id);
     if (!LOADING_STAGES.includes(status)) throw new HttpError(409, 'Containers can be removed only before the balance payment is recorded');
     if (c.gate_in_date) throw new HttpError(409, 'A container that has gated in cannot be removed');
+    const loadedBefore = await allContainersLoaded(conn, c.order_id);
     await conn.query('DELETE FROM container_bookings WHERE id = ?', [cid]);
     await audit(req, { action: 'CONTAINER_REMOVED', entityType: 'container', entityId: cid, orderId: c.order_id, changes: { containerNo: c.container_no } }, conn);
+    // Removing the last unloaded container leaves only loaded ones: the balance can be recorded now.
+    if (status === 'DOCUMENTATION_IN_PROGRESS' && !loadedBefore && (await allContainersLoaded(conn, c.order_id))) {
+      await notifyBalanceDue(conn, req.user!.id, c.order_id);
+    }
   });
   res.json({ ok: true });
 });

@@ -14,6 +14,35 @@ const TELL_SALES: OrderStatus[] = [
   'CANCELLED',
 ];
 
+/**
+ * Every container is loaded, so the balance payment can be recorded now.
+ * The status does not change at this point, so the usual status notification does not fire.
+ * Goes to the Sales person who created the order and everyone who records payments; when no balance
+ * is due, to Accounts instead, who confirm that before gate-in.
+ */
+export async function notifyBalanceDue(conn: PoolConnection, actorId: number, orderId: number) {
+  const [[order]] = await conn.query<RowDataPacket[]>(
+    `SELECT o.order_no AS orderNo, o.created_by AS createdBy, o.balance_amount AS balanceAmount, c.company_name AS customerName
+     FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ?`,
+    [orderId],
+  );
+  if (!order) return;
+  const noBalance = Number(order.balanceAmount) === 0;
+  const [team] = await conn.query<RowDataPacket[]>(
+    `SELECT u.id FROM users u
+     WHERE u.is_active = 1 AND EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = u.role_id AND rp.permission = ?)`,
+    [noBalance ? 'payments.verify' : 'payments.record'],
+  );
+  const recipients = new Set<number>(team.map((u) => Number(u.id)));
+  if (!noBalance) recipients.add(Number(order.createdBy));
+  recipients.delete(actorId);
+  if (!recipients.size) return;
+  const title = `${order.orderNo ?? `Order #${orderId}`}: All containers loaded`;
+  const message = `${order.customerName} · ${noBalance ? 'No balance due: confirm it so gate-in can start' : 'Record the balance payment'}`;
+  const values = [...recipients].map((id) => [id, orderId, title, message, `/orders/${orderId}`]);
+  await conn.query('INSERT INTO notifications (user_id, order_id, title, message, link) VALUES ?', [values]);
+}
+
 export async function notifyStatusChange(conn: PoolConnection, actorId: number, orderId: number, to: OrderStatus, remarks?: string | null) {
   const [[order]] = await conn.query<RowDataPacket[]>(
     `SELECT o.order_no AS orderNo, o.created_by AS createdBy, c.company_name AS customerName

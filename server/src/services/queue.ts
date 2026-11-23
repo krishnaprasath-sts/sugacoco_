@@ -22,13 +22,20 @@ export async function ordersInStatuses(statuses: OrderStatus[], orderBy = 'o.sta
   return rows;
 }
 
-/** Orders that left one of `from` for `to` recently (e.g. QC → Packaging). */
+/**
+ * Orders that left one of `from` for `to` most recently (e.g. QC → Packaging), newest hand-over first.
+ * The latest ids come from the history index; the order card is built for those rows only.
+ */
 export async function recentlyMoved(from: OrderStatus[], to: OrderStatus, limit = 20) {
   const [rows] = await pool.query<RowDataPacket[]>(
-    `${ORDER_CARD_SELECT}
-     WHERE o.id IN (SELECT h.order_id FROM order_status_history h
-                    WHERE h.from_status IN (${from.map(() => '?').join(',')}) AND h.to_status = ?)
-     ORDER BY o.status_changed_at DESC LIMIT ?`,
+    `${ORDER_CARD_SELECT.replace(
+      'FROM orders o',
+      `FROM (SELECT h.order_id, MAX(h.changed_at) AS movedAt FROM order_status_history h
+             WHERE h.from_status IN (${from.map(() => '?').join(',')}) AND h.to_status = ?
+             GROUP BY h.order_id ORDER BY movedAt DESC LIMIT ?) pg
+       JOIN orders o ON o.id = pg.order_id`,
+    )}
+     ORDER BY pg.movedAt DESC`,
     [...from, to, limit],
   );
   return rows;

@@ -62,10 +62,10 @@ export default function StatCard({ label, value, icon, color, to, loading, hint 
       {loading ? (
         <Skeleton variant="text" width={60} sx={{ fontSize: 40, bgcolor: 'rgba(255,255,255,0.3)' }} />
       ) : (
-        <Typography sx={{ fontSize: typeof value === 'string' && value.length > 8 ? { xs: 22, sm: 24 } : { xs: 24, sm: 28 }, fontWeight: 800, whiteSpace: 'nowrap', lineHeight: 1.1, letterSpacing: '-0.02em' }}>{value}</Typography>
+        <Typography sx={{ fontSize: typeof value === 'string' && value.length > 11 ? { xs: 17, sm: 22 } : typeof value === 'string' && value.length > 8 ? { xs: 20, sm: 24 } : { xs: 24, sm: 28 }, fontWeight: 800, whiteSpace: 'nowrap', lineHeight: 1.1, letterSpacing: '-0.02em' }}>{value}</Typography>
       )}
       <Typography sx={{ fontSize: { xs: 12.5, sm: 13.5 }, fontWeight: 500, mt: 0.25 }}>{label}</Typography>
-      {hint && <Typography sx={{ fontSize: 13, opacity: 0.85, mt: 0.25 }}>{hint}</Typography>}
+      {hint && <Typography sx={{ fontSize: 13, mt: 0.25 }}>{hint}</Typography>}
     </Box>
   );
 

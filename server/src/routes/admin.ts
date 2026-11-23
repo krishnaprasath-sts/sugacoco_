@@ -1,7 +1,7 @@
 /** MD/Admin: overview, pending actions, cancellations. Read-only apart from cancelling (in orders route). */
 import { Router } from 'express';
 import type { RowDataPacket } from 'mysql2';
-import { RECEIVED_BY_ORDER } from '../services/received.js';
+import { RECEIVED } from '../services/received.js';
 import { pool } from '../db/pool.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { STATUS_OWNER, type OrderStatus } from '../workflow/statuses.js';
@@ -23,10 +23,9 @@ adminRouter.get('/summary', async (_req, res) => {
     `SELECT o.currency,
             COUNT(*) AS orders,
             SUM(o.total_value - o.credit_applied_amount) AS totalValue,
-            SUM(LEAST(COALESCE(r.received, 0), o.total_value - o.credit_applied_amount)) AS received,
-            SUM(GREATEST(o.total_value - o.credit_applied_amount - COALESCE(r.received, 0), 0)) AS outstanding
+            SUM(LEAST(${RECEIVED}, o.total_value - o.credit_applied_amount)) AS received,
+            SUM(GREATEST(o.total_value - o.credit_applied_amount - ${RECEIVED}, 0)) AS outstanding
      FROM orders o
-     LEFT JOIN (${RECEIVED_BY_ORDER}) r ON r.order_id = o.id
      WHERE o.status NOT IN ('CANCELLED','CLOSED')
      GROUP BY o.currency`,
   );

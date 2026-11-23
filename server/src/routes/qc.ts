@@ -88,7 +88,7 @@ qcRouter.post('/orders/:id/updates', async (req, res) => {
 
 /** Orders at the QC stage (oldest first) and orders recently sent to Packaging. */
 qcRouter.get('/queue', async (_req, res) => {
-  const select = `
+  const columns = `
     SELECT o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.status, o.status_changed_at AS statusChangedAt,
            o.qc_status AS qcStatus, o.expected_ready_date AS expectedReadyDate, c.company_name AS customerName,
            (SELECT GROUP_CONCAT(CONCAT(i.product_name, ' (', TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM i.quantity)), ' ', i.unit, ')')
@@ -97,18 +97,21 @@ qcRouter.get('/queue', async (_req, res) => {
            (SELECT q.sourcing_status FROM qc_updates q WHERE q.order_id = o.id ORDER BY q.id DESC LIMIT 1) AS sourcingStatus,
            (SELECT q.quality_check_status FROM qc_updates q WHERE q.order_id = o.id ORDER BY q.id DESC LIMIT 1) AS qualityCheckStatus,
            (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id AND d.deleted_at IS NULL
-              AND d.category IN ('QC_MEDIA','CONTAINER_IMAGE','LOADING_IMAGE')) AS mediaCount
-    FROM orders o JOIN customers c ON c.id = o.customer_id`;
+              AND d.category IN ('QC_MEDIA','CONTAINER_IMAGE','LOADING_IMAGE')) AS mediaCount`;
   const [active] = await pool.query<RowDataPacket[]>(
-    `${select} WHERE o.status IN (${QC_WORKING.map(() => '?').join(',')})
+    `${columns} FROM orders o JOIN customers c ON c.id = o.customer_id
+     WHERE o.status IN (${QC_WORKING.map(() => '?').join(',')})
      ORDER BY (o.expected_ready_date IS NULL), o.expected_ready_date, o.status_changed_at`,
     QC_WORKING,
   );
+  // The 20 latest hand-overs come from the history index; details are worked out for those 20 only.
   const [sent] = await pool.query<RowDataPacket[]>(
-    `${select}
-     WHERE o.id IN (SELECT h.order_id FROM order_status_history h
-                    WHERE h.from_status IN (${QC_WORKING.map(() => '?').join(',')}) AND h.to_status = 'AWAITING_PACKAGING')
-     ORDER BY o.status_changed_at DESC LIMIT 20`,
+    `${columns}
+     FROM (SELECT h.order_id, MAX(h.changed_at) AS movedAt FROM order_status_history h
+           WHERE h.from_status IN (${QC_WORKING.map(() => '?').join(',')}) AND h.to_status = 'AWAITING_PACKAGING'
+           GROUP BY h.order_id ORDER BY movedAt DESC LIMIT 20) pg
+     JOIN orders o ON o.id = pg.order_id JOIN customers c ON c.id = o.customer_id
+     ORDER BY pg.movedAt DESC`,
     QC_WORKING,
   );
   const clean = (rows: RowDataPacket[]) => rows.map((r) => ({ ...r, mediaCount: Number(r.mediaCount) }));
@@ -124,26 +127,31 @@ const sentQuery = z.object({
 qcRouter.get('/sent', async (req, res) => {
   const { page, pageSize, q } = parse(sentQuery, req.query);
   const marks = QC_WORKING.map(() => '?').join(',');
-  const where = q
-    ? `WHERE (o.order_no LIKE ? OR o.pi_number LIKE ? OR c.company_name LIKE ?
-              OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_name LIKE ?))`
+  // Search: find the matching order ids first (each test runs on one table), then keep the hand-overs of those orders.
+  // (A derived table is built once; an IN (… UNION …) subquery would be re-run for every hand-over.)
+  const match = q
+    ? `JOIN (SELECT o.id FROM orders o WHERE o.order_no LIKE ? OR o.pi_number LIKE ?
+               OR o.customer_id IN (SELECT cs.id FROM customers cs WHERE cs.company_name LIKE ?)
+             UNION SELECT i.order_id FROM order_items i WHERE i.product_name LIKE ?) m ON m.id = s.order_id`
     : '';
   const like = q ? Array(4).fill(`%${q.replace(/[\\%_]/g, '\\$&')}%`) : [];
-  const from = `FROM orders o JOIN customers c ON c.id = o.customer_id
-    JOIN (SELECT order_id, MAX(changed_at) AS sentAt FROM order_status_history
-          WHERE from_status IN (${marks}) AND to_status = 'AWAITING_PACKAGING' GROUP BY order_id) s ON s.order_id = o.id
-    ${where}`;
+  // When each order was handed over comes from the history index alone.
+  const from = `FROM (SELECT order_id, MAX(changed_at) AS sentAt FROM order_status_history
+          WHERE from_status IN (${marks}) AND to_status = 'AWAITING_PACKAGING' GROUP BY order_id) s
+    ${match}`;
+  // Pick the page first, then work out products / QC status / files for those rows only.
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT o.id, o.order_no AS orderNo, o.pi_number AS piNumber, o.status, o.status_changed_at AS statusChangedAt,
-            o.qc_status AS qcStatus, o.expected_ready_date AS expectedReadyDate, c.company_name AS customerName, s.sentAt,
+            o.qc_status AS qcStatus, o.expected_ready_date AS expectedReadyDate, c.company_name AS customerName, pg.sentAt,
             (SELECT GROUP_CONCAT(CONCAT(i.product_name, ' (', TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM i.quantity)), ' ', i.unit, ')')
                                  ORDER BY i.sort_order SEPARATOR ', ') FROM order_items i WHERE i.order_id = o.id) AS products,
             (SELECT q.sourcing_status FROM qc_updates q WHERE q.order_id = o.id ORDER BY q.id DESC LIMIT 1) AS sourcingStatus,
             (SELECT q.quality_check_status FROM qc_updates q WHERE q.order_id = o.id ORDER BY q.id DESC LIMIT 1) AS qualityCheckStatus,
             (SELECT COUNT(*) FROM order_documents d WHERE d.order_id = o.id AND d.deleted_at IS NULL
                AND d.category IN ('QC_MEDIA','CONTAINER_IMAGE','LOADING_IMAGE')) AS mediaCount
-     ${from}
-     ORDER BY s.sentAt DESC, o.id DESC LIMIT ? OFFSET ?`,
+     FROM (SELECT s.order_id, s.sentAt ${from} ORDER BY s.sentAt DESC, s.order_id DESC LIMIT ? OFFSET ?) pg
+     JOIN orders o ON o.id = pg.order_id JOIN customers c ON c.id = o.customer_id
+     ORDER BY pg.sentAt DESC, o.id DESC`,
     [...QC_WORKING, ...like, pageSize, (page - 1) * pageSize],
   );
   const [[{ total }]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total ${from}`, [...QC_WORKING, ...like]);

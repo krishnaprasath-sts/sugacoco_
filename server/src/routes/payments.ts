@@ -84,6 +84,13 @@ paymentsRouter.post('/:id/verify', async (req, res) => {
        body.amountReceived != null ? toDecimal(body.amountReceived) : null, body.remarks, req.user!.id],
     );
     await conn.query('UPDATE payments SET status = ? WHERE id = ?', [body.decision, paymentId]);
+    if (body.decision === 'APPROVED') {
+      // Kept on the order so lists and reports don't have to add up every payment (migration 010).
+      await conn.query('UPDATE orders SET received_amount = received_amount + ? WHERE id = ?', [
+        toDecimal(body.amountReceived ?? Number(payment.amount)),
+        payment.order_id,
+      ]);
+    }
     await audit(req, {
       action: body.decision === 'APPROVED' ? 'PAYMENT_APPROVED' : 'PAYMENT_REJECTED',
       entityType: 'payment',
@@ -122,7 +129,8 @@ paymentsRouter.get('/queue', async (_req, res) => {
      ORDER BY COALESCE(p.recorded_at, o.status_changed_at) ASC`,
   );
   const [recent] = await pool.query<RowDataPacket[]>(
-    `SELECT v.id, v.decision, v.remarks, v.verified_at AS verifiedAt, vu.name AS verifiedByName,
+    // STRAIGHT_JOIN: walk the newest verifications first and stop at 30 (otherwise MariaDB may start from customers and sort everything).
+    `SELECT STRAIGHT_JOIN v.id, v.decision, v.remarks, v.verified_at AS verifiedAt, vu.name AS verifiedByName,
             p.payment_type AS paymentType, p.amount, p.currency,
             o.id AS orderId, o.order_no AS orderNo, c.company_name AS customerName
      FROM payment_verifications v
