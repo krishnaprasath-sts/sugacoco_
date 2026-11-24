@@ -24,6 +24,7 @@ import { fieldErrors, formError } from '../../lib/formErrors';
 import { formatDate, formatMoney } from '../../lib/format';
 import { parseNum } from '../../lib/money';
 import { useToast } from '../../components/useToast';
+import { apiUrl } from '../../lib/api';
 
 type Decision = 'APPROVED' | 'REJECTED';
 
@@ -110,7 +111,7 @@ export default function VerifyPaymentCard({ detail }: { detail: OrderDetail }) {
         ) : (
           <Stack spacing={0.5} sx={{ mb: 2 }}>
             {vouchers.map((v) => (
-              <Link key={v.id} href={`/api/documents/${v.id}/download?inline=1`} target="_blank" rel="noopener" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+              <Link key={v.id} href={apiUrl(`/documents/${v.id}/download?inline=1`)} target="_blank" rel="noopener" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
                 <ReceiptOutlined fontSize="small" /> {v.originalName}
               </Link>
             ))}

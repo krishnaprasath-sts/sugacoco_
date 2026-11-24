@@ -56,6 +56,7 @@ import { formatDate, formatDateTime, formatMoney } from '../../lib/format';
 import { parseNum } from '../../lib/money';
 import { copyText } from '../../lib/copyText';
 import { useConfirm, useToast } from '../../components/useToast';
+import { apiUrl } from '../../lib/api';
 
 const actionCardSx = { border: '2px solid', borderColor: 'primary.main' } as const;
 /** Stages where Documentation can still add containers or change booking/loading details. */
@@ -497,7 +498,7 @@ export function BillReleaseCard({ detail }: { detail: OrderDetail }) {
               {b.documentReference && <Typography variant="body2" sx={{ color: 'text.secondary' }}>Ref {b.documentReference}</Typography>}
               <Chip size="small" variant="outlined" color={b.releaseStatus === 'RELEASED' ? 'success' : 'warning'} label={b.releaseStatus === 'RELEASED' ? `Released ${formatDate(b.releaseDate)}` : 'Pending'} />
               {b.documentId && (
-                <Button size="small" component="a" href={`/api/documents/${b.documentId}/download?inline=1`} target="_blank" rel="noopener" sx={{ minHeight: 30 }}>
+                <Button size="small" component="a" href={apiUrl(`/documents/${b.documentId}/download?inline=1`)} target="_blank" rel="noopener" sx={{ minHeight: 30 }}>
                   View file
                 </Button>
               )}

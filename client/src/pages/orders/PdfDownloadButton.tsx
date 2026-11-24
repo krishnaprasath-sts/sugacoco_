@@ -4,12 +4,13 @@ import PictureAsPdfOutlined from '@mui/icons-material/PictureAsPdfOutlined';
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined';
 import RequestQuoteOutlined from '@mui/icons-material/RequestQuoteOutlined';
 import KeyboardArrowDown from '@mui/icons-material/KeyboardArrowDown';
+import { apiUrl } from '../../lib/api';
 
 /** Download the order as a Proforma Invoice or Quotation PDF (made on the server from the order data). */
 export default function PdfDownloadButton({ orderId }: { orderId: number }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const item = (type: 'pi' | 'quotation', label: string, hint: string, icon: React.ReactNode) => (
-    <MenuItem component="a" href={`/api/orders/${orderId}/pdf/${type}`} download onClick={() => setAnchor(null)}>
+    <MenuItem component="a" href={apiUrl(`/orders/${orderId}/pdf/${type}`)} download onClick={() => setAnchor(null)}>
       <ListItemIcon>{icon}</ListItemIcon>
       <ListItemText primary={label} secondary={hint} />
     </MenuItem>

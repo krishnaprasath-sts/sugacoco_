@@ -67,3 +67,15 @@ Restart the app in Webuzo. Migrations only add changes; they never drop data.
 
 ## 10. Do not use dev data in production
 `npm run seed:dev` (test logins) is blocked when `NODE_ENV=production`. Never copy the dev database to production.
+
+## 11. Website and API on two subdomains (optional)
+By default one Node app serves both. To host the website as static files on one subdomain and the API on another (both under the same main domain, both on HTTPS):
+
+1. Build the website with the API address:
+   ```bash
+   VITE_API_URL=https://api.your-domain.com npm run build --prefix client
+   ```
+   Upload the contents of `client/dist` to the website subdomain. On Apache add an `.htaccess` that sends unknown paths to `index.html`.
+2. Run the server on the API subdomain as in step 7, with `CLIENT_ORIGIN` and `PUBLIC_APP_URL` set to the **website** address. Do not upload `client/dist` next to it.
+
+The login cookie is `SameSite=Lax`, so the two addresses must share the same main domain (e.g. `app.example.com` and `api.example.com`).

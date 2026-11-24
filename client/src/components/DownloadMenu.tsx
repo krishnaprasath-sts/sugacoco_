@@ -12,7 +12,7 @@ const FORMATS = [
   { key: 'csv', label: 'CSV', icon: <DescriptionOutlined fontSize="small" /> },
 ] as const;
 
-/** "Download" button with Excel / PDF / CSV. `href` is the report URL without the format, e.g. /api/reports/orders?from=... */
+/** "Download" button with Excel / PDF / CSV. `href` is the report URL without the format: apiUrl('/reports/orders?from=...') */
 export default function DownloadMenu({ href, fullWidth, sx }: { href: string; fullWidth?: boolean; sx?: SxProps }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const sep = href.includes('?') ? '&' : '?';

@@ -3,7 +3,7 @@ import { useMemo, type ReactNode } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Box, Card, CardContent, Grid, MenuItem, Skeleton, Stack, TextField, Typography } from '@mui/material';
 import FilterAltOutlined from '@mui/icons-material/FilterAltOutlined';
-import { api } from '../../lib/api';
+import { api, apiUrl } from '../../lib/api';
 import { useUrlState } from '../../lib/useUrlState';
 import { useOnChange, usePaged } from '../../lib/usePaged';
 import { formatMoney } from '../../lib/format';
@@ -87,7 +87,7 @@ function useGroupedFilters(path: string) {
             <TextField label="PI date to" type="date" value={to} onChange={(e) => setTo(e.target.value, { resetPage: true })} />
           </Grid>
           <Grid size={{ xs: 12, md: 2 }} sx={{ display: 'flex', alignItems: 'flex-end' }}>
-            <DownloadMenu fullWidth href={`/api/reports/${path}${qs ? `?${qs}` : ''}`} />
+            <DownloadMenu fullWidth href={apiUrl(`/reports/${path}${qs ? `?${qs}` : ''}`)} />
           </Grid>
         </Grid>
       </CardContent>

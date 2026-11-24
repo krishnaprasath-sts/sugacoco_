@@ -1,4 +1,3 @@
-import '@fontsource-variable/dm-sans';
 import './index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -9,8 +8,11 @@ import { ThemeModeProvider } from './ThemeContext';
 import { ToastProvider } from './components/useToast';
 import { ApiError } from './lib/api';
 import { installSelectGuard } from './lib/selectGuard';
+import { markSignedIn, revealApp } from './lib/appShell';
 
 installSelectGuard();
+// Safety net: never leave the static sign-in copy (lib/appShell) covering the app.
+setTimeout(revealApp, 10000);
 
 /**
  * Session ended (expired, password reset, user deactivated): clear the cached user so
@@ -19,6 +21,7 @@ installSelectGuard();
 function onAuthError(err: unknown) {
   if (err instanceof ApiError && err.status === 401) {
     const me = queryClient.getQueryData(['auth', 'me']);
+    markSignedIn(false);
     if (me) {
       queryClient.clear();
       queryClient.setQueryData(['auth', 'me'], null);

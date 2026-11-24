@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import {
   Alert,
@@ -16,6 +16,7 @@ import { useLogin, useMe } from '../auth/useAuth';
 import type { User } from '../auth/roles';
 import { homePath, navFor } from '../nav/navConfig';
 import { ApiError } from '../lib/api';
+import { revealApp, shellValue } from '../lib/appShell';
 import Logo from '../components/Logo';
 import { SIDEBAR_GRADIENT } from '../theme';
 
@@ -26,8 +27,16 @@ export default function LoginPage() {
   const login = useLogin();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // Start from anything typed into the static copy of this page (see lib/appShell).
+  const [email, setEmail] = useState(() => shellValue('email'));
+  const [password, setPassword] = useState(() => shellValue('password'));
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    const { wasShown, focused } = revealApp();
+    // The copy had the cursor in a field; keep it there (the hidden app could not take focus itself).
+    if (wasShown) (focused === 'password' ? passwordRef : emailRef).current?.focus({ preventScroll: true });
+  }, []);
   const [showPassword, setShowPassword] = useState(false);
 
   const from = (location.state as { from?: string } | null)?.from;
@@ -104,6 +113,7 @@ export default function LoginPage() {
 
       {/* Form column. On phones the plum design fills the whole screen and the form floats on it as a card. */}
       <Box
+        component="main"
         sx={{
           display: 'flex',
           flexDirection: 'column',
@@ -179,6 +189,7 @@ export default function LoginPage() {
               autoComplete="username"
               autoFocus
               required
+              inputRef={emailRef}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               error={!!fieldErrors.email}
@@ -189,6 +200,7 @@ export default function LoginPage() {
               type={showPassword ? 'text' : 'password'}
               autoComplete="current-password"
               required
+              inputRef={passwordRef}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               error={!!fieldErrors.password}

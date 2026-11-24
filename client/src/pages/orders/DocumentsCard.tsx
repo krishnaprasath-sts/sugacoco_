@@ -36,6 +36,7 @@ import { useMe } from '../../auth/useAuth';
 import FilePicker from '../../components/FilePicker';
 import EmptyState from '../../components/EmptyState';
 import { useConfirm, useToast } from '../../components/useToast';
+import { apiUrl } from '../../lib/api';
 
 function fileIcon(mime: string) {
   if (mime === 'application/pdf') return <PictureAsPdfOutlined />;
@@ -92,13 +93,13 @@ export default function DocumentsCard({ detail }: { detail: OrderDetail }) {
                         <Stack direction="row">
                           {viewable && (
                             <Tooltip title="Open">
-                              <IconButton component="a" href={`/api/documents/${d.id}/download?inline=1`} target="_blank" rel="noopener" aria-label={`Open ${d.originalName}`}>
+                              <IconButton component="a" href={apiUrl(`/documents/${d.id}/download?inline=1`)} target="_blank" rel="noopener" aria-label={`Open ${d.originalName}`}>
                                 <OpenInNew fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           )}
                           <Tooltip title="Download">
-                            <IconButton component="a" href={`/api/documents/${d.id}/download`} aria-label={`Download ${d.originalName}`}>
+                            <IconButton component="a" href={apiUrl(`/documents/${d.id}/download`)} aria-label={`Download ${d.originalName}`}>
                               <DownloadOutlined fontSize="small" />
                             </IconButton>
                           </Tooltip>

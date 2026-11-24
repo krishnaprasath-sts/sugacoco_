@@ -30,6 +30,7 @@ import EmptyState from '../../components/EmptyState';
 import ErrorState from '../../components/ErrorState';
 import { useDebounced } from '../../lib/useDebounced';
 import StatusChip from '../../components/StatusChip';
+import { apiUrl } from '../../lib/api';
 
 const PRESETS: Record<string, { label: string; statuses: OrderStatus[] }> = {
   all: { label: 'All orders', statuses: [] },
@@ -87,7 +88,7 @@ function OrdersReport() {
               <TextField label="PI date to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </Grid>
             <Grid size={{ xs: 12, md: 2 }} sx={{ display: 'flex', alignItems: 'flex-end' }}>
-              <DownloadMenu fullWidth href={`/api/reports/orders${filterQs ? `?${filterQs}` : ''}`} />
+              <DownloadMenu fullWidth href={apiUrl(`/reports/orders${filterQs ? `?${filterQs}` : ''}`)} />
             </Grid>
           </Grid>
         </CardContent>
@@ -139,7 +140,7 @@ function CustomersReport() {
   return (
     <>
       <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2 }}>
-        <DownloadMenu href="/api/reports/customers" />
+        <DownloadMenu href={apiUrl('/reports/customers')} />
       </Stack>
       <ListPagination page={paged.page} pageSize={paged.pageSize} total={paged.total} onChange={paged.setPage} noun="customers" placement="top" />
       <Card>

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../lib/api';
 import type { User } from './roles';
+import { markSignedIn } from '../lib/appShell';
 
 const ME_KEY = ['auth', 'me'] as const;
 
@@ -12,6 +13,7 @@ export function useMe() {
       try {
         // The server answers { user: null } when nobody is signed in.
         const { user } = await api<{ user: User | null }>('/auth/me');
+        markSignedIn(!!user);
         return user ?? null;
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) return null;
@@ -27,7 +29,10 @@ export function useLogin() {
   return useMutation({
     mutationFn: (body: { email: string; password: string }) =>
       api<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
-    onSuccess: ({ user }) => qc.setQueryData(ME_KEY, user),
+    onSuccess: ({ user }) => {
+      markSignedIn(true);
+      qc.setQueryData(ME_KEY, user);
+    },
   });
 }
 
@@ -37,6 +42,7 @@ export function useLogout() {
     mutationFn: () => api('/auth/logout', { method: 'POST' }),
     onSettled: () => {
       // Drop all cached data so the next user never sees the previous user's orders.
+      markSignedIn(false);
       qc.clear();
       qc.setQueryData(ME_KEY, null);
     },

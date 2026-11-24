@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import NotificationBell from '../components/NotificationBell';
 import ThemeToggle from '../components/ThemeToggle';
@@ -32,6 +32,7 @@ import { useLogout, useMe } from '../auth/useAuth';
 import { navFor, SHARED_SECTIONS, type NavItem, type NavMenu } from '../nav/navConfig';
 import Logo from '../components/Logo';
 import { ACTIVE_PILL, BRAND, SIDEBAR_GRADIENT } from '../theme';
+import { revealApp } from '../lib/appShell';
 
 const DRAWER_WIDTH = 236;
 /** Sidebar open/close timing, shared by the sidebar, top bar and content so they move together. */
@@ -105,6 +106,10 @@ function Clock() {
 }
 
 export default function AppLayout() {
+  // Signed in: drop the static sign-in copy (lib/appShell) if it is still on screen.
+  useLayoutEffect(() => {
+    revealApp();
+  }, []);
   const theme = useTheme();
   // noSsr: read the real screen size on the first render (otherwise the sidebar slides in over the page).
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true });

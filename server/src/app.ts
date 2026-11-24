@@ -34,7 +34,8 @@ export function createApp() {
 
   // Webuzo runs Node behind Apache/Nginx; needed for correct client IP (rate limit) and secure cookies.
   app.set('trust proxy', 1);
-  app.use(helmet());
+  // same-site: lets the website load API files when it is hosted on a sister subdomain (app.example.com + api.example.com).
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   // Gzip API responses and the built app (queues and reports are large JSON; JS/CSS shrink about 70%).
   app.use(compression());
   app.use(cors({ origin: env.clientOrigin, credentials: true }));

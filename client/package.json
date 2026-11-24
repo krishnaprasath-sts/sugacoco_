@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:static": "tsc --noEmit && vite build && node scripts/prerender-shell.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
